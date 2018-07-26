@@ -27,6 +27,14 @@ RUN apt-get install -y \
     zip \
     unzip
 
+RUN apt-get install apt-file &&
+    apt-file update &&
+    apt-get install software-properties-common &&
+    add-apt-repository -y ppa:jonathonf/ffmpeg-3 &&
+    apt-get update &&
+
+
+
 RUN update-locale LANG=ja_JP.UTF-8 LANGUAGE=ja_JP:ja
 ENV LANG ja_JP.UTF-8
 ENV LC_ALL ja_JP.UTF-8
