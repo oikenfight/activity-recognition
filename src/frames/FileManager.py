@@ -1,4 +1,5 @@
 import os
+import copy
 
 
 class FileManager:
@@ -29,11 +30,11 @@ class FileManager:
         self.__reset_all()
         return all_dir_lists
 
-    def all_path_lists(self):
+    def all_file_lists(self):
         self._search_files()
-        all_path_lists = self.all_paths
+        all_file_lists = self.all_path_lists
         self.__reset_all()
-        return all_path_lists
+        return all_file_lists
 
     def _update(self, item: str):
         # 現在のパスを更新
@@ -54,7 +55,7 @@ class FileManager:
     def _reset_current(self, current_path, current_path_list):
         # 直前に更新したパスをもとに戻す
         self.current_path = current_path
-        self.current_path_list = current_path_list
+        self.current_path_list = copy.deepcopy(current_path_list)   # 単純にリストをコピーすると元のリストを参照してしまうため、値のみコピー
 
     def __reset_all(self):
         self.__init__()
@@ -62,7 +63,7 @@ class FileManager:
     def _search_dirs(self):
         # インスタンス変数は更新されていくため、データを保持しておく
         current_path = self.current_path
-        current_path_list = self.current_path_list
+        current_path_list = copy.deepcopy(self.current_path_list)   # 単純にリストをコピーすると元のリストを参照してしまうため、値のみコピー
         # ディレクトリ一覧を取得
         files = os.listdir(current_path)
         # ディレクトリ一覧
@@ -80,7 +81,7 @@ class FileManager:
     def _search_files(self):
         # インスタンス変数は更新されていくため、データを保持しておく
         current_path = self.current_path
-        current_path_list = self.current_path_list
+        current_path_list = copy.deepcopy(self.current_path_list)   # 単純にリストをコピーすると元のリストを参照してしまうため、値のみコピー
         # ファイル + ディレクトリ一覧
         files = os.listdir(current_path)
         # ディレクトリ一覧
@@ -100,7 +101,7 @@ class FileManager:
 
 if __name__ == '__main__':
     # 探索したいディレクトリを指定してからインスタンス化する
-    FileManager.BASE_DIR = '/home/oikenfight/workspace/data/STAIR-actions/STAIR_Actions_v1.0/'
+    FileManager.BASE_DIR = './src/frames/data'
     file_manager = FileManager()
 
     print('===== all dirs ==================')
