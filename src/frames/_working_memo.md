@@ -22,7 +22,7 @@
     - ファイル番号: 「0001C ~ 」、各アクションごとで通し番号で開始番号・終了番号は不規則
 
 ```angular2html
-STAIR_Actions_v1/ 
+data/ 
     {action}/
         {アクション番号}_{ファイル番号}.mp4
     ...
@@ -48,3 +48,20 @@ frame_data/
 - 映像から画像を切り出す間隔は引数で受け取る
 - 1フレームの長さは引数で受け取る
 - 前のフレームの重複時間は引数で受ける
+
+
+## 実行方法
+
+```angular2html
+$ docker-compose run --rm python src/frames/mp4_convert_batch.py
+```
+
+- 注意点
+    - 環境
+        - python3/ffmpeg
+    - データセットの置き場所、保存先のディレクトリを指定・確認する
+        - python コンテナの作業ディレクトリをルートにパスを指定する
+        - 確認ファイル
+            - mp4_convert_batch.py
+            - mp4_to_jpg.sh
+    - データの置き方（構造）は上記のデータセットの構成に従う
