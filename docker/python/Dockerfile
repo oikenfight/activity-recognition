@@ -1,4 +1,4 @@
-FROM image_caption_workspace_oikawa
+FROM workspace_oikawa
 
 MAINTAINER Yuta Oikawa
 

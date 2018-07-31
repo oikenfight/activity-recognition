@@ -1,8 +1,8 @@
 version: '3'
 
 services:
-  activity_recognition_workspace_oikawa:
-    image: activity_recognition_workspace_oikawa
+  workspace_oikawa:
+    image: workspace_oikawa
     build:
       context: ./
       dockerfile: docker/workspace/Dockerfile
@@ -12,9 +12,9 @@ services:
       - ./:/workspace
     working_dir: "/workspace"
     tty: true
-  activity_recognition_python_oikawa:
+  python:
     depends_on:
-      - activity_recognition_workspace_oikawa
+      - workspace_oikawa
     build:
       context: ./
       dockerfile: ./docker/python/Dockerfile
