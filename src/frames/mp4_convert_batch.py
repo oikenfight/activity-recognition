@@ -22,9 +22,9 @@ if __name__ == '__main__':
             os.makedirs(path)
 
         # 各ファイルに対して ./mp4_to_jpt_frame.sh を実行してフレームを生成
-        # 実行コマンド: ./mp4_to_jpg_frame.sh brushing_teeth a017-0115C 1
-        # 実行コマンド: ./mp4_to_jpg_frame.sh {アクション名} {ファイル名（拡張子なし）} {fps}
-        command = "%s/mp4_to_jpg_frame.sh %s %s %s" % (BASE, file_list[0], file_list[1], str(FPS))
+        # 実行コマンド: ./mp4_to_jpg.sh brushing_teeth a017-0115C 1
+        # 実行コマンド: ./mp4_to_jpg.sh {アクション名} {ファイル名（拡張子なし）} {fps}
+        command = "%s/mp4_to_jpg.sh %s %s %s" % (BASE, file_list[0], file_list[1], str(FPS))
         status = os.system(command)
 
         progress = "%s/%s %s" % (str(i), str(num), command)
