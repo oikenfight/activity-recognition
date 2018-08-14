@@ -35,5 +35,24 @@ data = {
     - pkl もアクション数分出力する
     - メソッド化して任意のアクションのみ実行を可能にする
 - 出力形式を満たす
-- 出力ファイル名は {action}/{action}_{datetime}.pkl とする
+- 出力ファイル名は {datetime}/{action}.pkl とする
+    - action ごとに pkl が作成される
 - 保存場所は一旦 src/cnn/dataset 以下とする
+
+## 実行
+- 設定項目
+    - BASE: ファイルの実行場所
+    - BASE_OUTPUT: 保存先（dataset/ までのpath）
+    - INPUT_FILES_BASE: 切り出した画像ファイルが置かれているベースディレクトリ
+    - MODEL_PATH: cafeemodel がある path
+
+```angular2html
+# set up
+Features.BASE = BASE
+Features.BASE_OUTPUT = OUTPUT_BASE
+Features.INPUT_FILES_BASE = INPUT_FILES_BASE
+Features.MODEL_PATH = MODEL_PATH
+
+# execute
+features.main()
+```
