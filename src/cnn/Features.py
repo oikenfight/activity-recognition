@@ -123,6 +123,7 @@ if __name__ == "__main__":
     # set up
     Features.BASE = BASE
     Features.BASE_OUTPUT = OUTPUT_BASE
+    Features.INPUT_FILES_BASE = INPUT_FILES_BASE
     Features.MODEL_PATH = MODEL_PATH
     features = Features()
 
