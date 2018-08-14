@@ -1,0 +1,4 @@
+__pycache__
+VGG_ILSVRC_19_layers.caffemodel
+*.pkl
+
