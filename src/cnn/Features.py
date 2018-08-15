@@ -8,6 +8,7 @@ from datetime import datetime
 
 
 class Features:
+    # TASK: 要セットアップ
     BASE = './src/cnn/'
     INPUT_FILES_BASE = './src/frames/frame_data'
     OUTPUT_BASE = BASE + 'dataset/'
