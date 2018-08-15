@@ -4,8 +4,7 @@ from FileManager import FileManager
 
 if __name__ == "__main__":
     BASE = './src/cnn'
-    BASE_DATA = BASE + '/dataset/20180814_100001'
-    # BASE_DATA = BASE + '/dataset/20180814_094004'
+    BASE_DATA = BASE + '/dataset/20180815_052528'
     FileManager.BASE_DIR = BASE_DATA
     file_manager = FileManager()
 

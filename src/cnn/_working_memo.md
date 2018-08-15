@@ -10,8 +10,13 @@
 ファイル保存場所
 ```
 src/cnn/dataset/
-    {action}/
-        {action}_{datetime}.pkl
+    {datetime}/
+        {action}}.pkl,
+        {action}}.pkl,
+        ...
+    {datetime}/
+        {action}}.pkl,
+        ...
     ...
     ...
 ```
@@ -19,7 +24,12 @@ src/cnn/dataset/
 pkl 保存形式
 ```
 data = {
-    {label}: [
+    {filename}: [
+        0: [....],
+        1: [....],
+        ...
+    ],
+    {filename}: [
         0: [....],
         1: [....],
         ...
@@ -55,4 +65,9 @@ Features.MODEL_PATH = MODEL_PATH
 
 # execute
 features.main()
+```
+
+- 実行コマンド
+```angular2html
+$ docker-compose run --rm python ./src/cnn/Features.py
 ```
