@@ -6,7 +6,7 @@ if __name__ == '__main__':
     BASE = './src/frames'
     BASE_DATA = BASE + '/data'
     BASE_OUTPUT = BASE + '/frame_data'
-    FPS = 1
+    FPS = 2
     FileManager.BASE_DIR = BASE_DATA
     file_manager = FileManager()
 
