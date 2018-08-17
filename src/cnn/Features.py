@@ -5,6 +5,7 @@ import pickle as pkl
 from FileManager import FileManager
 from image_model import VGG19
 from datetime import datetime
+from chainer import Variable
 
 
 class Features:
@@ -79,15 +80,15 @@ class Features:
             exit()
             return None
 
-    def get_feature(self, path) -> np.array:
+    def get_feature(self, path) -> Variable:
         """
         特徴抽出実行
         :param str path: this is model path
         :return:
         """
-        return self.image_model.feature(path).data[0]
+        return self.image_model.feature(path)
 
-    def append(self, path_data: list, feature: np.array):
+    def append(self, path_data: list, feature: Variable):
         """
         結果を辞書に保存
         :param str path_data:
