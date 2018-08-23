@@ -16,8 +16,8 @@ class Dataset:
     def __init__(self):
         self.all_files = self.file_manager.all_files()  # List(str)
         self.actions = {}
-        self.label_data = np.empty((0, self.get_output_size()), int)
-        self.features_data = np.empty((0, 11, self.FEATURE_SIZE), float)  # TODO: 11 直書きキモいから直す
+        self.label_data = np.empty(0, int)
+        self.features_data = np.empty((0, 11, self.FEATURE_SIZE), float)
         self.load()
 
     def load(self):
@@ -31,11 +31,10 @@ class Dataset:
             action_name = pkl_file.split('.')[0]
             self.actions[len(self.actions)] = action_name
 
-            # 正解ラベル作成
-            action_label = np.zeros(len(self.all_files))
-            action_label[i] = 1
-
-            print(action_label)
+            # # 正解ラベル作成
+            # action_label = np.zeros(len(self.all_files))
+            # action_label[i] = 1
+            # print(action_label)
 
             with open(pkl_file, 'rb') as f:
                 dataset = pkl.load(f)
@@ -43,9 +42,10 @@ class Dataset:
 
             # ラベルと時系列画像特徴量リストが対応するデータセットを作成
             for k, (folder_name, features) in enumerate(dataset.items()):
-                self.label_data = np.append(self.label_data, np.array([action_label]), axis=0)
+                self.label_data = np.append(self.label_data, np.array([i]), axis=0)
                 # TODO: 切り出し間隔ちゃんと考えたほうがいいかな。。 _working_memo に書いた通りに。
                 self.features_data = np.append(self.features_data, np.array([features[:11]]), axis=0)
+                print(str(k), '/', len(dataset), ':', folder_name, ', data:', self.features_data.shape, ', label:', self.label_data.shape)
 
     def get_output_size(self) -> int:
         return len(self.all_files)
@@ -76,8 +76,8 @@ class Dataset:
         test_indexes = indexes[:test_num]
 
         # TODO: 11 直書きはキモいから直す
-        train_data, train_label = np.empty((0, 11, self.FEATURE_SIZE), float), np.empty((0, self.get_output_size()), int)
-        test_data, test_label = np.empty((0, 11, self.FEATURE_SIZE), float), np.empty((0, self.get_output_size()), int)
+        train_data, train_label = np.empty((0, 11, self.FEATURE_SIZE), float), np.empty(0, int)
+        test_data, test_label = np.empty((0, 11, self.FEATURE_SIZE), float), np.empty(0, int)
 
         for i in train_indexes:
             train_data = np.append(train_data, np.array([self.features_data[i]]), axis=0)
