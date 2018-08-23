@@ -32,6 +32,7 @@ class IrisChain(Chain):
         )
         
     def __call__(self,x,y):
+        print(y)
         return F.softmax_cross_entropy(self.fwd(x), y)        
 
     def fwd(self,x):
@@ -69,9 +70,9 @@ nrow, ncol = ans.shape
 ok = 0
 for i in range(nrow):
     cls = np.argmax(ans[i,:])
-    print ans[i,:], cls            
+    print(ans[i,:], cls)
     if cls == yans[i]:
         ok += 1
         
-print ok, "/", nrow, " = ", (ok * 1.0)/nrow
+print(ok, "/", nrow, " = ", (ok * 1.0)/nrow)
 
