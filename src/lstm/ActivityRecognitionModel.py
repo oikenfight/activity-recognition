@@ -6,6 +6,7 @@ from chainer import Link, Chain, ChainList
 import chainer.functions as F
 import chainer.links as L
 from chainer.training import extensions
+import time
 
 
 class ActivityRecognitionModel(chainer.Chain):
@@ -25,27 +26,23 @@ class ActivityRecognitionModel(chainer.Chain):
 
     def __call__(self, data, label):
         loss = None
-        label = Variable(label)
+        accuracy = None
+        # t = Variable(label)
         self.lstm.reset_state()
-        print('================================')
-        print(data.shape)
-        print(data.dtype)
-        print('================================')
-        for i in range(len(data)):
-            print('~~~~~ loop', str(i), '~~~~~~~~~~~~~~~~~')
-            for j in range(len(data[i])):
-                print('<<<<< loop', str(j), '>>>>>')
-                print(len(data[0][0]))
-                print(data[0][0])
-                h1 = self.image_vec(data[i][j])
-                h2 = self.lstm(h1)
-                h3 = self.output(h2)
+        t = label
 
-            print(h3)
-            if i == len(data) - 1:
-                loss = F.softmax_cross_entropy(h3, label)
-                accuracy = F.accuracy(h3, label)
+        batch_size, feature_length, feature_size = data.shape
+        for col in range(feature_length):
+            x = data[:, col, :]
+            # print(x.shape)
+            # print(x)
+            h1 = self.image_vec(x)
+            h2 = self.lstm(h1)
+            h3 = self.output(h2)
 
+            if col == feature_length - 1:
+                loss = F.softmax_cross_entropy(h3, t)
+                accuracy = F.accuracy(h3, t)
         return loss, accuracy
 
 
