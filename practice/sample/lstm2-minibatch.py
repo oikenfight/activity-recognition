@@ -23,7 +23,8 @@ def load_data(filename):
         dataset[i] = vocab[word]
     return dataset
 
-train_data = load_data('ptb.train.txt')
+
+train_data = load_data('./practice/sample/ptb.train.txt')
 eos_id = vocab['<eos>']
 
 class MyLSTM(chainer.Chain):
@@ -43,9 +44,17 @@ class MyLSTM(chainer.Chain):
             else:
                 next_w_id = s[i+1]
             tx = Variable(np.array(next_w_id, dtype=np.int32))
+            print(tx)
             x_k = self.embed(Variable(np.array(s[i], dtype=np.int32)))
             y = self.H(x_k)
-            loss = F.softmax_cross_entropy(self.W(y), tx)
+            w = self.W(y)
+            print('==============')
+            print('w:', w.shape)
+            print(w)
+            print('tx:', tx.shape)
+            print(tx)
+            print('==============')
+            loss = F.softmax_cross_entropy(w, tx)
             accum_loss = loss if accum_loss is None else accum_loss + loss
         return accum_loss
 
@@ -63,7 +72,7 @@ def resizeforbatch(bsen):
             if ( j < len(bsen[i])):
                 bsen2[i][j] = bsen[i][j]
             else:
-                bsen2[i][j] = zero_id   
+                bsen2[i][j] = zero_id
     return bsen2.T
 
 demb = 100
@@ -74,10 +83,10 @@ optimizer.setup(model)
 bc = 0
 batsen = []
 for epoch in range(5):
-    s = []    
+    s = []
     for pos in range(len(train_data)):
         id = train_data[pos]
-        s.append(id)        
+        s.append(id)
         if (id == eos_id):
             bc += 1
             batsen.append(s)
@@ -91,7 +100,7 @@ for epoch in range(5):
                 batsen = []
                 bc = 0
         if (pos % 100 == 0):
-            print pos, "/", len(train_data)," finished"
+            print(pos, "/", len(train_data)," finished")
     outfile = "lstm2batch-" + str(epoch) + ".model"            
     serializers.save_npz(outfile, model)
 
