@@ -2,8 +2,6 @@ FROM nvidia/cuda:latest
 
 MAINTAINER Yuta Oikawa
 
-RUN nvidia-smi
-
 RUN apt-get upgrade -y && apt-get update -y
 RUN apt-get install -y \
     wget \
@@ -25,7 +23,8 @@ RUN apt-get install -y \
     python3-dev \
     python3-pip \
     zip \
-    unzip
+    unzip \
+    python3-tk
 
 # ffmpeg
 RUN apt-get install apt-file -y
@@ -44,7 +43,6 @@ ENV LC_CTYPE ja_JP.UTF-8
 RUN pip3 install --upgrade pip
 RUN pip3 install \
     setuptools \
-    cupy-cuda92 \
     cupy \
     chainer \
     scipy \
@@ -52,6 +50,9 @@ RUN pip3 install \
     scikit-learn \
     pillow \
     h5py \
+    matplotlib \
     --no-cache-dir
+
+RUN nvidia-smi
 
 RUN mkdir workspace
