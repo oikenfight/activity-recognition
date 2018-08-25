@@ -11,11 +11,12 @@ from chainer import Variable
 class Features:
     # TASK: 要セットアップ
     BASE = './src/cnn/'
-    INPUT_FILES_BASE = './src/frames/frame_data'
-    OUTPUT_BASE = BASE + 'dataset/'
-    FileManager.BASE_DIR = INPUT_FILES_BASE
+    INPUT_FILES_BASE = '/frame_data'
+    OUTPUT_BASE = './data/cnn/'
     MODEL_PATH = BASE + 'VGG_ILSVRC_19_layers.caffemodel'
     image_model = VGG19()
+
+    FileManager.BASE_DIR = INPUT_FILES_BASE
     file_manager = FileManager()
 
     def __init__(self):
@@ -118,8 +119,8 @@ class Features:
 if __name__ == "__main__":
     # set up FileManager
     BASE = './src/cnn/'
-    INPUT_FILES_BASE = './src/frames/frame_data'
-    OUTPUT_BASE = BASE + 'dataset/'
+    INPUT_FILES_BASE = '/frame_data'
+    OUTPUT_BASE = './data/cnn/'
     MODEL_PATH = BASE + 'VGG_ILSVRC_19_layers.caffemodel'
 
     # set up
