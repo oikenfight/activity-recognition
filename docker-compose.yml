@@ -22,4 +22,6 @@ services:
       dockerfile: ./docker/python/Dockerfile
     volumes:
       - ./:/workspace
+      - ../data/:/data
+      - ../frame_data/:/frame_data
     working_dir: "/workspace"
