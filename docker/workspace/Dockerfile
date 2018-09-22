@@ -1,4 +1,4 @@
-FROM nvidia/cuda:latest
+FROM nvidia/cuda:9.1-cudnn7-devel
 
 MAINTAINER Yuta Oikawa
 
@@ -40,10 +40,14 @@ ENV LANG ja_JP.UTF-8
 ENV LC_ALL ja_JP.UTF-8
 ENV LC_CTYPE ja_JP.UTF-8
 
-RUN pip3 install --upgrade pip
-RUN pip3 install \
+# python3, pip3 を python, pip にシンボルリンク
+RUN ln -s /usr/bin/python3 /usr/local/bin/python && \
+    ln -s /usr/bin/pip3 /usr/local/bin/pip
+
+RUN pip install --upgrade pip
+RUN pip install \
     setuptools \
-    cupy \
+    cupy-cuda91 \
     chainer \
     scipy \
     pandas \
