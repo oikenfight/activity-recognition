@@ -2,23 +2,36 @@ import pickle as pkl
 import numpy as np
 from chainer.datasets import tuple_dataset
 from FileManager import FileManager
+from chainer import cuda
 import time
 
 
 class Dataset:
     # TASK: 要セットアップ
-    BASE = './src/lstm/'
-    INPUT_FILES_BASE = './src/cnn/dataset/20180815_065125'
-    FileManager.BASE_DIR = INPUT_FILES_BASE
+    BASE = '.'
+    INPUT_FILES_BASE = '.'
     FEATURE_SIZE = 4096
-    file_manager = FileManager()
+    GPU_ID = 0
+    FRAME_SIZE = 8
+    OVERLAP_SIZE = 4
 
     def __init__(self):
-        self.all_files = self.file_manager.all_files()  # List(str)
+        self.to_gpu()
+        self.all_files = self.load_input_files()  # List(str)
         self.actions = {}
         self.label_data = np.empty(0, int)
-        self.features_data = np.empty((0, 11, self.FEATURE_SIZE), float)
+        self.features_data = np.empty((0, self.FRAME_SIZE, self.FEATURE_SIZE), float)
         self.load()
+
+    def to_gpu(self):
+        print('use gup')
+        cuda.check_cuda_available()
+        cuda.get_device(self.GPU_ID).use()
+
+    def load_input_files(self):
+        FileManager.BASE_DIR = self.INPUT_FILES_BASE
+        file_manager = FileManager()
+        return file_manager.all_files()
 
     def load(self):
         print('Dataset Loading ...')
@@ -42,10 +55,15 @@ class Dataset:
 
             # ラベルと時系列画像特徴量リストが対応するデータセットを作成
             for k, (folder_name, features) in enumerate(dataset.items()):
-                self.label_data = np.append(self.label_data, np.array([i]), axis=0)
-                # TODO: 切り出し間隔ちゃんと考えたほうがいいかな。。 _working_memo に書いた通りに。
-                self.features_data = np.append(self.features_data, np.array([features[:11]]), axis=0)
-                print(str(k), '/', len(dataset), ':', folder_name, ', data:', self.features_data.shape, ', label:', self.label_data.shape)
+                for n in range(0, len(features), self.OVERLAP_SIZE):
+                    frame_data = features[n:n+self.FRAME_SIZE]
+                    # TODO: 微妙に 8 フレームに足りてないデータを無駄にしてるから、できたら直す（学習する時にフレーム数が一定のほうが楽だから今はこうしてる。）
+                    if len(frame_data) < 8: break
+                    self.label_data = np.append(self.label_data, np.array(i))
+                    self.features_data = np.append(self.features_data, np.array([frame_data]), axis=0)
+
+                if k % 50 == 0:
+                    print(str(k), '/', len(dataset), ':', folder_name, ', data:', self.features_data.shape, ', label:', self.label_data.shape)
 
     def get_output_size(self) -> int:
         return len(self.all_files)
@@ -92,4 +110,6 @@ class Dataset:
 
 if __name__ == "__main__":
     # set up
+    Dataset.BASE = './src/lstm/'
+    Dataset.INPUT_FILES_BASE = './output/cnn/20180908_051340'
     dataset = Dataset()
