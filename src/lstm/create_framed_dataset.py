@@ -1,10 +1,11 @@
 import pickle as pkl
-import numpy as np
-from chainer.datasets import tuple_dataset
-from FileManager import FileManager
 from chainer import cuda
 import time
 from datetime import datetime
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from FileManager import FileManager
 
 
 class Dataset:

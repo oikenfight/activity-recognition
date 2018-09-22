@@ -2,10 +2,16 @@ import numpy as np
 import pickle as pkl
 from chainer import cuda
 from chainer import datasets, iterators, optimizers, serializers
-from ActivityRecognitionModel import ActivityRecognitionModel
 import time
 from datetime import datetime
 from os import makedirs
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+from ActivityRecognitionModel import ActivityRecognitionModel
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from FileManager import FileManager
 
 
 class Train:
