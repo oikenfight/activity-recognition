@@ -1,26 +1,23 @@
 import numpy as np
 import pickle as pkl
-from chainer import cuda, Function, gradient_check, report, training, utils, Variable
+from chainer import cuda
 from chainer import datasets, iterators, optimizers, serializers
-from chainer import Link, Chain, ChainList
-import chainer.functions as F
-import chainer.links as L
-from chainer.datasets import tuple_dataset
-from chainer.training import extensions
-from Dataset import Dataset
 from ActivityRecognitionModel import ActivityRecognitionModel
 import time
+from datetime import datetime
+from os import makedirs
 
 
 class Train:
     # Train constants
     GPU_ID = 0
-    EPOCH_NUM = 100
+    EPOCH_NUM = 50
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
-    BACH_SIZE = 10
+    BACH_SIZE = 30
     TEST_RATE = 0.25
     OVERLAP_SIZE = 4
+    OUTPUT_BASE = './output/model/'
 
     # TASK: set pkl file path
     FRAMED_DATA_FILE_PATH = './output/lstm_frame/*.pkl'
@@ -32,6 +29,7 @@ class Train:
         self.model = self.set_model()
         self.to_gpu()
         self.optimizer = self.set_optimizer()
+        self.save_dir = self.make_save_dir()
 
     def load_framed_data(self):
         print('Framed Data Loading ...')
@@ -80,7 +78,6 @@ class Train:
 
     def set_model(self) -> ActivityRecognitionModel:
         self._print_title('set model:')
-        # model = ActivityRecognitionModel(self.FEATURE_SIZE, self.HIDDEN_SIZE, self.dataset.get_output_size())
         model = ActivityRecognitionModel(self.FEATURE_SIZE, self.HIDDEN_SIZE, len(self.actions))
         return model
 
@@ -97,11 +94,16 @@ class Train:
         self.test_data = np.array(self.test_data[0]), np.array(self.test_data[1])
         self.model.to_gpu(self.GPU_ID)
 
-    def set_optimizer(self):
+    def set_optimizer(self) -> optimizers:
         self._print_title('set optimizer')
         optimizer = optimizers.Adam()
         optimizer.setup(self.model)
         return optimizer
+
+    def make_save_dir(self) -> str:
+        save_dir = self.OUTPUT_BASE + datetime.now().strftime("%Y%m%d_%H%M%S")
+        makedirs(save_dir)
+        return save_dir
 
     def random_batches(self, data) -> list:
         """
@@ -138,14 +140,16 @@ class Train:
 
     def main(self):
         self._print_title('main')
-
-
-
         for epoch in range(self.EPOCH_NUM):
             self._print_title('epoch: {}'.format(epoch + 1))
             # TODO: loss , accuracy 辺りが間違ってそう
             self.train()
             self.test()
+
+            # save model
+            print('>>> save {0:04d}.model'.format(epoch))
+            serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
+            serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
 
     def train(self):
         sum_loss = 0
@@ -161,7 +165,7 @@ class Train:
             sum_loss += loss
             sum_acc += acc
             cnt += 1
-            if i % 50 == 0:
+            if i % 100 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i + 1, loop_count, sum_loss/cnt, sum_acc/cnt))
         print('<<< train loss: {} accuracy: {}'.format(sum_loss/cnt, sum_acc/cnt))
 
