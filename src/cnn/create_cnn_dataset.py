@@ -6,15 +6,17 @@ from FileManager import FileManager
 from image_model import VGG19
 from datetime import datetime
 from chainer import Variable
+import cupy as cp
 
 
 class Features:
     # TASK: 要セットアップ
     BASE = './src/cnn/'
     INPUT_FILES_BASE = '/frame_data'
-    OUTPUT_BASE = './data/cnn/'
+    OUTPUT_BASE = './output/cnn/'
     MODEL_PATH = BASE + 'VGG_ILSVRC_19_layers.caffemodel'
     image_model = VGG19()
+    device = 0
 
     FileManager.BASE_DIR = INPUT_FILES_BASE
     file_manager = FileManager()
@@ -25,6 +27,7 @@ class Features:
         self.save_dir = ''
         self.init()
         self.load_model()
+        self.to_gpu()
 
     def init(self):
         """
@@ -41,6 +44,9 @@ class Features:
         """
         self.image_model.load(self.MODEL_PATH)
 
+    def to_gpu(self):
+        self.image_model.to_gpu(self.device)
+
     def main(self):
         all_num = len(self.all_file_lists)
         before_action = ''
@@ -49,7 +55,8 @@ class Features:
             path = self.get_path(path_data)
             # 画像から特徴量を取得
             feature = self.get_feature(path)
-            print(str(i), '/', str(all_num), ':', path)
+            if i % 100 == 0:
+                print(str(i), '/', str(all_num), ':', path)
             # 特徴量を追加
             if before_action == path_data[0] or before_action == '':
                 self.append(path_data, feature)
@@ -81,15 +88,17 @@ class Features:
             exit()
             return None
 
-    def get_feature(self, path) -> Variable:
+    def get_feature(self, path) -> np.array:
         """
         特徴抽出実行
         :param str path: this is model path
         :return:
         """
-        return self.image_model.feature(path)
+        # list として保存しておいたほうが処理が早そうなため。（GPU 使ってないときは一個目のじゃないとエラーになるよ）
+        # return self.image_model.feature(path).data[0]
+        return cp.asnumpy(self.image_model.feature(path).data[0]).tolist()
 
-    def append(self, path_data: list, feature: Variable):
+    def append(self, path_data: list, feature: np.array):
         """
         結果を辞書に保存
         :param str path_data:
@@ -104,13 +113,6 @@ class Features:
     def dump_to(self, path: str):
         print('dump to: ' + path)
         print(len(self.features))
-        for file, val in self.features.items():
-            print('==================================')
-            print(file)
-            print(len(val))
-            # print('>>>>>>>>>>>>>>>>>')
-            # for feature in val:
-            #     print(feature)
 
         with open(path, 'wb') as f:
             pkl.dump(self.features, f, pkl.HIGHEST_PROTOCOL)
@@ -120,7 +122,7 @@ if __name__ == "__main__":
     # set up FileManager
     BASE = './src/cnn/'
     INPUT_FILES_BASE = '/frame_data'
-    OUTPUT_BASE = './data/cnn/'
+    OUTPUT_BASE = './output/cnn/'
     MODEL_PATH = BASE + 'VGG_ILSVRC_19_layers.caffemodel'
 
     # set up
