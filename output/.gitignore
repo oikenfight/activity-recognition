@@ -1,0 +1,5 @@
+__pycache__/
+cnn/*
+lstm_frame/*
+model/*
+result/*

@@ -4,9 +4,11 @@ from FileManager import FileManager
 
 if __name__ == '__main__':
     BASE = './src/frames'
-    BASE_DATA = BASE + '/data'
-    BASE_OUTPUT = BASE + '/frame_data'
+    # コンテナからデータを見れるように deepstation のデータ保管場所を docker-compose にてマウントしてるから、その場所。
+    BASE_DATA = '/data/STAIR-actions/stair_action'
+    BASE_OUTPUT = '/frame_data'
     FPS = 2
+
     FileManager.BASE_DIR = BASE_DATA
     file_manager = FileManager()
 
@@ -24,7 +26,7 @@ if __name__ == '__main__':
         # 各ファイルに対して ./mp4_to_jpt_frame.sh を実行してフレームを生成
         # 実行コマンド: ./mp4_to_jpg.sh brushing_teeth a017-0115C 1
         # 実行コマンド: ./mp4_to_jpg.sh {アクション名} {ファイル名（拡張子なし）} {fps}
-        command = "%s/mp4_to_jpg.sh %s %s %s" % (BASE, file_list[0], file_list[1], str(FPS))
+        command = "%s/mp4_to_jpg.sh %s %s %s %s %s" % (BASE, BASE_DATA, BASE_OUTPUT, file_list[0], file_list[1], str(FPS))
         status = os.system(command)
 
         progress = "%s/%s %s" % (str(i), str(num), command)

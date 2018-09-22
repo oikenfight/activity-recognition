@@ -22,7 +22,7 @@
     - ファイル番号: 「0001C ~ 」、各アクションごとで通し番号で開始番号・終了番号は不規則
 
 ```angular2html
-data/ 
+path/to/base_data/ 
     {action}/
         {アクション番号}_{ファイル番号}.mp4
     ...
@@ -32,7 +32,7 @@ data/
 ## 出力
 
 ```angular2html
-frame_data/
+path/to/base_output/
     {action}/
         001/
         002/
@@ -59,9 +59,10 @@ $ docker-compose run --rm python src/frames/mp4_convert_batch.py
 - 注意点
     - 環境
         - python3/ffmpeg
-    - データセットの置き場所、保存先のディレクトリを指定・確認する
-        - python コンテナの作業ディレクトリをルートにパスを指定する
-        - 確認ファイル
-            - mp4_convert_batch.py
-            - mp4_to_jpg.sh
-    - データの置き方（構造）は上記のデータセットの構成に従う
+    - データの置き場所、保存先のディレクトリを指定・確認する
+        - ファイルの置き場所を docker-compose の volume で指定
+        - mp4_convert_batch で、pythonコンテナから見たデータのパスを指定
+        - パス指定箇所
+            - BASE_DATA
+            - BASE_OUTPUT
+        - base_data の置き方は上記の通り（start_action の action 一覧をそのまま置く）

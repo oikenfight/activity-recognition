@@ -65,6 +65,7 @@ class FileManager:
         current_path = self.current_path
         current_path_list = copy.deepcopy(self.current_path_list)   # 単純にリストをコピーすると元のリストを参照してしまうため、値のみコピー
         # ディレクトリ一覧を取得
+        print(current_path)
         files = os.listdir(current_path)
         # ディレクトリ一覧
         dirs = [f for f in files if os.path.isdir(os.path.join(current_path, f))]
@@ -101,7 +102,8 @@ class FileManager:
 
 if __name__ == '__main__':
     # 探索したいディレクトリを指定してからインスタンス化する
-    FileManager.BASE_DIR = './src/frames/data'
+    # FileManager.BASE_DIR = './src/frames/data'
+    FileManager.BASE_DIR = './data/stair_action'
     file_manager = FileManager()
 
     print('===== all dirs ==================')
