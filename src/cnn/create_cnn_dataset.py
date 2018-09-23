@@ -13,6 +13,8 @@ from FileManager import FileManager
 
 
 class Features:
+    # TODO: cnn.py の Cnn クラスを使って実装やり直したい。。
+
     # TASK: 要セットアップ
     BASE = './src/cnn/'
     INPUT_FILES_BASE = '/frame_data'
