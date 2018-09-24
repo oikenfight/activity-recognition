@@ -1,10 +1,10 @@
 import numpy as np
 import pickle as pkl
-from chainer import cuda
-from chainer import datasets, iterators, optimizers, serializers
+import chainer
+from chainer import cuda, datasets, iterators, optimizers, serializers, functions as F
 import time
 from datetime import datetime
-from os import makedirs
+import os
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
@@ -108,7 +108,7 @@ class Train:
 
     def make_save_dir(self) -> str:
         save_dir = self.OUTPUT_BASE + datetime.now().strftime("%Y%m%d_%H%M%S")
-        makedirs(save_dir)
+        os.makedirs(save_dir)
         return save_dir
 
     def random_batches(self, data) -> list:
@@ -157,36 +157,44 @@ class Train:
             serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
             serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
 
+    def _forward(self, feature_batch: np.ndarray, label_batch: np.ndarray, train=True):
+        x = self.xp.asarray(feature_batch).astype(np.float32)
+        t = self.xp.asarray(label_batch).astype(np.int32)
+        with chainer.using_config('train', train):
+            with chainer.using_config('enable_backprop', train):
+                y = self.model(x)
+                loss = F.softmax_cross_entropy(y, t)
+                accuracy = F.accuracy(y, t)
+        return loss, accuracy
+
     def train(self):
         sum_loss = 0
         sum_acc = 0
-        cnt = 0
-        loop_count = int(len(self.train_data[1])/self.BACH_SIZE)
+        batch_num = int(len(self.train_data[1])/self.BACH_SIZE)
+
         for i, (feature_batch, label_batch) in enumerate(self.random_batches(self.train_data)):
+            loss, acc = self._forward(feature_batch, label_batch)
             self.model.cleargrads()
-            loss, acc = self.model(feature_batch, label_batch)
             loss.backward()
-            # loss.unchain_backward()  # TODO: これは必要なのだろうか??
+            loss.unchain_backward()  # TODO: これは必要なのだろうか??
             self.optimizer.update()
-            sum_loss += loss
-            sum_acc += acc
-            cnt += 1
+            sum_loss += float(loss.data)
+            sum_acc += float(acc.data)
             if i % 100 == 0:
-                print('{} / {} loss: {} accuracy: {}'.format(i + 1, loop_count, sum_loss/cnt, sum_acc/cnt))
-        print('<<< train loss: {} accuracy: {}'.format(sum_loss/cnt, sum_acc/cnt))
+                loop = i + 1
+                print('{} / {} loss: {} accuracy: {}'.format(loop, batch_num, sum_loss/loop, sum_acc/loop))
+        print('<<< train loss: {} accuracy: {}'.format(sum_loss/batch_num, sum_acc/batch_num))
 
     def test(self):
         sum_loss = 0
         sum_acc = 0
-        size = 0
-        cnt = 0
+        batch_num = int(len(self.test_data[1])/self.BACH_SIZE)
+
         for i, (feature_batch, label_batch) in enumerate(self.random_batches(self.test_data)):
-            loss, acc = self.model(feature_batch, label_batch)
-            sum_loss += loss
-            sum_acc += acc
-            size += len(label_batch)
-            cnt += 1
-        print('<<< test loss: {} accuracy: {}'.format(sum_loss/cnt, sum_acc/cnt))
+            loss, acc = self._forward(feature_batch, label_batch, train=False)
+            sum_loss += float(loss.data)
+            sum_acc += float(acc.data)
+        print('<<< test loss: {} accuracy: {}'.format(sum_loss/batch_num, sum_acc/batch_num))
 
     @staticmethod
     def _print_title(s: str):
@@ -200,7 +208,7 @@ class Train:
 
 
 if __name__ == '__main__':
-    Train.FRAMED_DATA_FILE_PATH = './output/lstm_frame/20180913_111307.pkl'
+    Train.FRAMED_DATA_FILE_PATH = './output/lstm_frame/20180924_070808.pkl'
     train = Train()
     # train.to_gpu(0)
     train.main()
