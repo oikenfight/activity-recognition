@@ -1,10 +1,12 @@
 import pickle as pkl
-import numpy as np
-from chainer.datasets import tuple_dataset
-from FileManager import FileManager
 from chainer import cuda
 import time
 from datetime import datetime
+import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from FileManager import FileManager
 
 
 class Dataset:
@@ -67,7 +69,7 @@ class Dataset:
                     # self.label_data = np.append(self.label_data, np.array(i))
                     # self.features_data = np.append(self.features_data, np.array([frame_data]), axis=0)
                     self.label_data += [i]
-                    self.features_data += [[frame_data]]
+                    self.features_data += [frame_data]
 
                 if k % 50 == 0:
                     # print(str(k), '/', len(dataset), ':', folder_name, ', data:', self.features_data.shape, ', label:', self.label_data.shape)

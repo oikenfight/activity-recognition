@@ -9,10 +9,10 @@ then
   exit ${E_BADARGS}
 fi
 
-BASE_DATA=$1
-BASE_OUTPUT=$2
-ACTION=$3
-FILE_NAME=$4
+BASE_INPUT=$1
+ACTION=$2
+FILE_NAME=$3
+BASE_OUTPUT=$4
 FPS=$5
 
-ffmpeg -i ${BASE_DATA}/${ACTION}/${FILE_NAME}.mp4 -f image2 -vf fps=${FPS} ${BASE_OUTPUT}/${ACTION}/${FILE_NAME}/%04d.jpg
+ffmpeg -i ${BASE_INPUT}/${ACTION}/${FILE_NAME}.mp4 -f image2 -vf fps=${FPS} ${BASE_OUTPUT}/${ACTION}/${FILE_NAME}/%04d.jpg
