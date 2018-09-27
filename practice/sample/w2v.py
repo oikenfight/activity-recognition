@@ -17,7 +17,7 @@ index2word = {}
 word2index = {}
 counts = collections.Counter()
 dataset = []
-with open('ptb.train.txt') as f:
+with open('ptb._train.txt') as f:
     for line in f:
         for word in line.split():
             if word not in word2index:

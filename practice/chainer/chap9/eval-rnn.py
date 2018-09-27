@@ -19,7 +19,7 @@ def load_data(filename):
     return dataset
 
 
-train_data = load_data('../ptb.train.txt')
+train_data = load_data('../ptb._train.txt')
 eos_id = vocab['<eos>']
 
 

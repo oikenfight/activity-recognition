@@ -47,7 +47,7 @@ class MyLSTM(chainer.Chain):
 def softmax(x):
     return np.exp(x) / np.sum(np.exp(x), axis=0)
 
-train_data = load_data('ptb.train.txt')
+train_data = load_data('ptb._train.txt')
 eos_id = vocab['<eos>']
 max_id = len(vocab)
 

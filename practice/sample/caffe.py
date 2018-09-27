@@ -14,7 +14,7 @@ from PIL import Image
 
 from chainer.links import GoogleNet
 
-chainer.using_config('train', False)
+chainer.using_config('_train', False)
 
 #image = Image.open('mydog.jpg').convert('RGB')
 image = Image.open('cat2.png').convert('RGB')
@@ -45,7 +45,7 @@ x_data = np.array([ x_data ])
 
 x = chainer.Variable(x_data)
 func = caffe.CaffeFunction('bvlc_googlenet.caffemodel')
-# y, = func(inputs={'data': x}, outputs=['loss3/classifier'], train=False)
+# y, = func(inputs={'data': x}, outputs=['loss3/classifier'], _train=False)
 y, = func(inputs={'data': x}, outputs=['loss3/classifier'])
 
 prob = F.softmax(y)

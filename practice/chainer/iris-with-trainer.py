@@ -75,7 +75,7 @@ trainer = training.Trainer(updater, (5000, 'epoch'))
 # add ProgresBar
 trainer.extend(extensions.ProgressBar())
 
-# train
+# _train
 trainer.run()
 
 #

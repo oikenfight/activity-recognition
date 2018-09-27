@@ -20,7 +20,7 @@ def load_data(filename):
     return dataset
 
 
-train_data = load_data('/workspace/practice/chainer/ptb.train.txt')
+train_data = load_data('/workspace/practice/chainer/ptb._train.txt')
 eos_id = vocab['<eos>']
 
 

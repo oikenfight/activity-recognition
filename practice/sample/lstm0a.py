@@ -20,7 +20,7 @@ def load_data(filename):
         dataset[i] = vocab[word]
     return dataset
 
-train_data = load_data('ptb.train.txt')
+train_data = load_data('ptb._train.txt')
 eos_id = vocab['<eos>']
 
 class MyLSTM(chainer.Chain):

@@ -62,7 +62,7 @@ class MyLSTM(chainer.Chain):
         return accum_loss
     
 
-train_data = load_data('ptb.train.txt')
+train_data = load_data('ptb._train.txt')
 
 demb = 100
 def cal_ps(model, s):

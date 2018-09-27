@@ -24,7 +24,7 @@ class LSTM(Chain):
         # 順伝播の計算を行う関数
         # :param x: 入力値
         # :param t: 正解の予測値
-        # :param train: 学習かどうか
+        # :param _train: 学習かどうか
         # :return: 計算した損失 or 予測値
         x = Variable(x)
         if train:
