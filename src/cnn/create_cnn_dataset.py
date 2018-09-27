@@ -1,15 +1,20 @@
 import numpy as np
-import json
-import os
 import pickle as pkl
-from FileManager import FileManager
-from image_model import VGG19
 from datetime import datetime
-from chainer import Variable
 import cupy as cp
+import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+from image_model import VGG19
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from FileManager import FileManager
 
 
 class Features:
+    # TODO: cnn.py の Cnn クラスを使って実装やり直したい。。
+
     # TASK: 要セットアップ
     BASE = './src/cnn/'
     INPUT_FILES_BASE = '/frame_data'

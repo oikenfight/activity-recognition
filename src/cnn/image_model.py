@@ -2,8 +2,6 @@ import os
 import _pickle as pickle
 import numpy as np
 from PIL import Image
-import chainer
-from chainer import cuda, functions as F
 from chainer.links import caffe
 
 

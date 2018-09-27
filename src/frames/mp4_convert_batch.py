@@ -1,15 +1,20 @@
 import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from FileManager import FileManager
 
 
 if __name__ == '__main__':
     BASE = './src/frames'
     # コンテナからデータを見れるように deepstation のデータ保管場所を docker-compose にてマウントしてるから、その場所。
-    BASE_DATA = '/data/STAIR-actions/stair_action'
+    BASE_INPUT = '/data/STAIR-actions/stair_action'
     BASE_OUTPUT = '/frame_data'
     FPS = 2
 
-    FileManager.BASE_DIR = BASE_DATA
+    FileManager.BASE_DIR = BASE_INPUT
     file_manager = FileManager()
 
     # data/以下の全ファイル（リスト型）を拾う （{action} > [{file_name}, ...]）
@@ -24,9 +29,8 @@ if __name__ == '__main__':
             os.makedirs(path)
 
         # 各ファイルに対して ./mp4_to_jpt_frame.sh を実行してフレームを生成
-        # 実行コマンド: ./mp4_to_jpg.sh brushing_teeth a017-0115C 1
-        # 実行コマンド: ./mp4_to_jpg.sh {アクション名} {ファイル名（拡張子なし）} {fps}
-        command = "%s/mp4_to_jpg.sh %s %s %s %s %s" % (BASE, BASE_DATA, BASE_OUTPUT, file_list[0], file_list[1], str(FPS))
+        # 実行コマンド: ./mp4_to_jpg.sh {path/to/script/dir} {path/to/input/dir} {action_name} {file_name（拡張子なし）} {path/to/output/dir} {fps}
+        command = "%s/mp4_to_jpg.sh %s %s %s %s %s" % (BASE, BASE_INPUT, file_list[0], file_list[1], BASE_OUTPUT, str(FPS))
         status = os.system(command)
 
         progress = "%s/%s %s" % (str(i), str(num), command)
