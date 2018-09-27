@@ -16,7 +16,7 @@ class Converter:
 
     def main(self):
         print()
-        print("<<< convert %s into %s as jpg >>>" % (self.input_path, self.output_dir))
+        print("<<< Converter class: convert %s into %s as jpg >>>" % (self.input_path, self.output_dir))
 
         if not os.path.isfile(self.input_path):
             raise InputFileNotFoundError
@@ -50,11 +50,11 @@ class InputFileNotFoundError(Exception):
 
 if __name__ == '__main__':
     # setup Converter
-    Converter.FPS =  2
+    Converter.FPS = 2
 
     # Test input file path
     input_path = '../data/STAIR-actions/stair_action/brushing_teeth/a017-0116C.mp4'
-    output_dir = './workspace/tmp/'
+    output_dir = './tmp/'
 
     converter = Converter(input_path, output_dir)
     converter.main()
