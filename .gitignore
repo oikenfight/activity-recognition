@@ -3,3 +3,4 @@
 /.idea
 /data
 /frame_data
+src/__pycache__/
