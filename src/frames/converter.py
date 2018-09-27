@@ -27,14 +27,11 @@ class Converter:
 
         print('>>> execute ffmpeg command.')
         convert_command = "ffmpeg -i "+self.input_path+" -f image2 -vf fps="+str(self.FPS)+' '+self.output_dir+"%04d.jpg"
-
         print(convert_command)
-
         result_status = os.system(convert_command)
 
         if result_status != 0:
             raise FfmpegExecuteError
-
         return True
 
 
@@ -49,6 +46,10 @@ class InputFileNotFoundError(Exception):
 
 
 if __name__ == '__main__':
+    #
+    # Example
+    #
+
     # setup Converter
     Converter.FPS = 2
 
