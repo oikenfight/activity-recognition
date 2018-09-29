@@ -71,9 +71,11 @@ class CnnBatch:
         # ディレクトリ辞書を生成
         input_dir_path_list = {}
         for path_data in self.file_manager.all_file_lists():
-            # path_data[0]: アクション名
-            # path_data[1]: ビデオファイル名
-            # path_data[2]: 画像名 => これは完全に無視
+            """
+            path_data[0]: アクション名
+            path_data[1]: ビデオファイル名
+            path_data[2]: 画像名 => これは完全に無視
+            """
             if path_data[0] not in input_dir_path_list:
                 # 新しいアクションをキーに、空リストデータを作成
                 input_dir_path_list[path_data[0]] = []
