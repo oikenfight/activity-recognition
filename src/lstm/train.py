@@ -16,6 +16,9 @@ from FileManager import FileManager
 
 class Train:
     # Train constants
+    OUTPUT_BASE = './output/model/'
+
+    # setup
     GPU_DEVICE = 0
     EPOCH_NUM = 50
     FEATURE_SIZE = 4096
@@ -23,9 +26,8 @@ class Train:
     BACH_SIZE = 30
     TEST_RATE = 0.25
     OVERLAP_SIZE = 4
-    OUTPUT_BASE = './output/model/'
 
-    def __init__(self, lstm_frame_pkl_path):
+    def __init__(self, lstm_frame_pkl_path: str):
         self.xp = np
         self.lstm_frame_pkl_path = lstm_frame_pkl_path
         self.train_data, self.test_data, self.actions = None, None, None
@@ -65,7 +67,7 @@ class Train:
                 ([features, features, ...], [label, label, ...])
             )
         """
-        self._print_title('shuffle data to _train and test')
+        self._print_title('shuffle data to train and test')
 
         # index（データ数配列）をランダムに並び替え、2つにデータを分ける
         test_num = int(len(loaded_label) * self.TEST_RATE)
@@ -215,13 +217,11 @@ class Train:
 
 
 if __name__ == '__main__':
-    # const
+    # setup
     Train.GPU_DEVICE = 0
-    Train.FRAMED_DATA_FILE_PATH = './output/lstm_frame/20180924_070808.pkl'
 
     # params
-    lstm_frame_pkl_path = './output/lstm_frame/20180924_070808.pkl'
-    use_gpu = True
+    lstm_frame_pkl_path = './output/framed_cnn/20180929_075743.pkl'
 
     train = Train(lstm_frame_pkl_path)
     train.main()
