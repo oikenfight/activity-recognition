@@ -23,5 +23,5 @@ services:
     volumes:
       - ./:/workspace
       - ../data/:/data
-      - ../frame_data/:/frame_data
+      - ../converted_data:/converted_data
     working_dir: "/workspace"
