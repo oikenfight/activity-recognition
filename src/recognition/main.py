@@ -63,12 +63,13 @@ class Recognition:
     def _get_features_by_cnn(self):
         self._print_title("get features by cnn with %s" % self.OUTPUT_JPG_TMP_DIR)
         # params
+        input_dir_path = self.OUTPUT_JPG_TMP_DIR
         # setup
         cnn.cnn.Cnn.MODEL_PATH = self.MODEL_PATH
         cnn.cnn.Cnn.GPU_DEVICE = 0
         # execute
-        cnn_instance = cnn.cnn.Cnn(self.OUTPUT_JPG_TMP_DIR)
-        for i, cnn_vec in enumerate(cnn_instance.main_with_dir()):
+        cnn_instance = cnn.cnn.Cnn()
+        for i, cnn_vec in enumerate(cnn_instance.main_with_dir(input_dir_path)):
             self.cnn_features += [cnn_vec]
         print('>>> cnn feature length:', str(len(self.cnn_features)))
 
