@@ -28,8 +28,10 @@ class Recognition:
     LSTM_MODEL_PATH = './output/model/20180927_063124/0049.model'
     LSTM_ACTIONS_PKL_PATH = './output/model/20180927_063124/actions.pkl'
 
-    def __init__(self, input_video_path):
+    def __init__(self, input_video_path: str, lstm_model_path: str, lstm_actions_pkl_path: str):
         self.input_video_path = input_video_path
+        self.lstm_model_path = lstm_model_path
+        self.lstm_actions_pkl_path = lstm_actions_pkl_path
         self.target_key = self._set_target_key()
         self.cnn_features = []
         self.framed_cnn_features = np.empty((0, 8, 4096), np.float32)
@@ -54,11 +56,13 @@ class Recognition:
     def _convert_mp4_to_jpg(self):
         self._print_title("convert mp4 to jpg, input: %s, output_dir: %s" % (self.input_video_path, self.OUTPUT_JPG_TMP_DIR))
         # params
+        input_path = self.input_video_path
+        output_dir = self.OUTPUT_JPG_TMP_DIR
         # setup
         frames.converter.Converter.FPS = self.FFMPEG_FPS
         # execute
-        converter_instance = frames.converter.Converter(self.input_video_path, self.OUTPUT_JPG_TMP_DIR)
-        converter_instance.main()
+        converter_instance = frames.converter.Converter()
+        converter_instance.main(input_path, output_dir)
 
     def _get_features_by_cnn(self):
         self._print_title("get features by cnn with %s" % self.OUTPUT_JPG_TMP_DIR)
@@ -85,9 +89,11 @@ class Recognition:
     def _classify_frame_by_lstm(self):
         self._print_title("classify frame by my lstm model")
         # params
+        model_path = self.lstm_model_path
+        actions_pkl_path = self.lstm_actions_pkl_path
         # setup
         # execute
-        classify_instance = lstm.classify.Classify(self.framed_cnn_features, self.LSTM_MODEL_PATH, self.LSTM_ACTIONS_PKL_PATH)
+        classify_instance = lstm.classify.Classify(self.framed_cnn_features, model_path, actions_pkl_path)
         classify_instance.main()
 
     @staticmethod
@@ -97,8 +103,18 @@ class Recognition:
 
 
 if __name__ == "__main__":
-    # params
-    input_video_path = '../data/STAIR-actions/stair_action/cutting_food/a010-0497C.mp4'
+    #
+    # Example
+    #
 
-    recognition = Recognition(input_video_path)
+    # prepare
+    model_dir = './output/model/20180929_091536/'
+
+    # params
+    input_video_path = '../data/STAIR-actions/stair_action/throwing_trash/a005-0025C.mp4'
+    lstm_model_path = model_dir + '0002.model'
+    lstm_actions_pkl_path = model_dir + 'actions.pkl'
+
+    # execute
+    recognition = Recognition(input_video_path, lstm_model_path, lstm_actions_pkl_path)
     recognition.main()
