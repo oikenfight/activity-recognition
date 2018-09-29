@@ -102,17 +102,12 @@ if __name__ == "__main__":
     #
 
     # set up
-    cnn = Cnn(test_file_path)
+    cnn_instance = Cnn()
+
     # execute
-    cnn_vec = cnn.main()
+    cnn_vec = cnn_instance.main(test_file_path)
     print(len(cnn_vec))
 
-    #
-    # param is directory path
-    #
-
-    # set up
-    cnn_with_dir = Cnn(test_dir_path)
-    # execute
-    for i, cnn_vec in enumerate(cnn_with_dir.main_with_dir()):
+    # execute with directory
+    for i, cnn_vec in enumerate(cnn_instance.main_with_dir(test_dir_path)):
         print(str(i), ': ', str(len(cnn_vec)))
