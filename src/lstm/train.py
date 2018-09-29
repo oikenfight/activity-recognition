@@ -6,6 +6,12 @@ import time
 from datetime import datetime
 import os
 import sys
+import cupy
+
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+fig = plt.figure()
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
 from ActivityRecognitionModel import ActivityRecognitionModel
@@ -23,7 +29,7 @@ class Train:
     EPOCH_NUM = 50
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
-    BACH_SIZE = 30
+    BACH_SIZE = 10
     TEST_RATE = 0.25
     OVERLAP_SIZE = 4
 
@@ -45,7 +51,8 @@ class Train:
     def _to_gpu(self):
         if self.GPU_DEVICE >= 0:
             self._print_title('use gpu')
-            self.xp = cuda.cupy
+            # self.xp = cuda.cupy
+            self.xp = cupy
             self.model.to_gpu(self.GPU_DEVICE)
             print()
             print(type(self.xp))
@@ -125,8 +132,9 @@ class Train:
         for epoch in range(self.EPOCH_NUM):
             self._print_title('epoch: {}'.format(epoch + 1))
             # TODO: loss , accuracy 辺りが間違ってそう
-            self._train()
-            self._test()
+            train_loss = self._train()
+            test_loss = self._test()
+            self._loss_plot(epoch, train_loss, test_loss)
 
             # save model
             print('>>> save {0:04d}.model'.format(epoch))
@@ -167,43 +175,61 @@ class Train:
         # return batches
 
     def _forward(self, feature_batch: np.ndarray, label_batch: np.ndarray, train=True):
-        x = self.xp.asarray(feature_batch).astype(np.float32)
+        # 0軸 と 1軸を入れ替えて転置
+        _x = feature_batch.transpose((1, 0, 2))
+        # gpu を使っていれば、cupy に変換される
+        x = self.xp.asarray(_x).astype(np.float32)
         t = self.xp.asarray(label_batch).astype(np.int32)
         with chainer.using_config('train', train):
             with chainer.using_config('enable_backprop', train):
                 y = self.model(x)
                 loss = F.softmax_cross_entropy(y, t)
                 accuracy = F.accuracy(y, t)
+                # if not train:
+                #     print('==== softmax ==========================')
+                #     print(F.softmax(y).data)
+                #     print('==== label ==========================')
+                #     print(t)
         return loss, accuracy
 
     def _train(self):
-        sum_loss = 0
-        sum_acc = 0
+        loss, acc = [], []
         batch_num = int(len(self.train_data[1])/self.BACH_SIZE)
 
         for i, (feature_batch, label_batch) in enumerate(self._random_batches(self.train_data)):
-            loss, acc = self._forward(feature_batch, label_batch)
+            _loss, _acc = self._forward(feature_batch, label_batch)
             self.model.cleargrads()
-            loss.backward()
-            loss.unchain_backward()  # TODO: これは必要なのだろうか??
+            _loss.backward()
+            _loss.unchain_backward()  # TODO: これは必要なのだろうか??
             self.optimizer.update()
-            sum_loss += float(loss.data)
-            sum_acc += float(acc.data)
+            loss.append(_loss.data.tolist())
+            acc.append(_acc.data.tolist())
+
             if i % 100 == 0:
                 loop = i + 1
-                print('{} / {} loss: {} accuracy: {}'.format(loop, batch_num, sum_loss/loop, sum_acc/loop))
-        print('<<< _train loss: {} accuracy: {}'.format(sum_loss/batch_num, sum_acc/batch_num))
+                print('{} / {} loss: {} accuracy: {}'.format(loop, batch_num, str(np.average(loss)), str(np.average(acc))))
+        print('<<< _train loss: {} accuracy: {}'.format(str(np.average(loss)), str(np.average(acc))))
+        return loss
 
     def _test(self):
-        sum_loss = 0
-        sum_acc = 0
-        batch_num = int(len(self.test_data[1])/self.BACH_SIZE)
-
+        loss, acc = [], []
         for i, (feature_batch, label_batch) in enumerate(self._random_batches(self.test_data)):
-            loss, acc = self._forward(feature_batch, label_batch, train=False)
-            sum_loss += float(loss.data)
-            sum_acc += float(acc.data)
-        print('<<< test loss: {} accuracy: {}'.format(sum_loss/batch_num, sum_acc/batch_num))
+            _loss, _acc = self._forward(feature_batch, label_batch, train=False)
+            # print('loss:', loss)
+            # print('acc:', acc)
+            # time.sleep(3)
+            loss.append(_loss.data.tolist())
+            acc.append(_acc.data.tolist())
+        print('<<< test loss: {} accuracy: {}'.format(str(np.average(loss)), str(np.average(acc))))
+        return loss
+
+    @staticmethod
+    def _loss_plot(epoch, train_loss, test_loss):
+        plt.plot(epoch, np.average(train_loss))
+        plt.plot(epoch, np.average(test_loss))
+        plt.xlabel('epochs')
+        plt.ylabel('loss')
+        plt.savefig('loss.png')
 
     @staticmethod
     def _print_title(s: str):

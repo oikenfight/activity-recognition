@@ -25,11 +25,14 @@ class ActivityRecognitionModel(chainer.Chain):
             output=L.Linear(hidden_size, out_size)
         )
 
-    def __call__(self, features):
+    def __call__(self, xs):
+        """
+        :param xs: transposed feature_batch, it is np or cp array, shape is (frame_size, batch_size, feature_num)
+        :return:
+        """
         self.lstm.reset_state()
-        batch_size, feature_length, feature_size = features.shape
-        for col in range(feature_length):
-            h1 = self.image_vec(features[:, col])
+        for x in xs:
+            h1 = self.image_vec(x)
             h2 = self.lstm(h1)
         return self.output(h2)
 

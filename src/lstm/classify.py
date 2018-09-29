@@ -53,7 +53,8 @@ class Classify:
         for frame in self.framed_data:
             # ActivityRecognitionModel で batch_size を取得する部分があるため、1段階無駄にネストしてサイズを shape を統一
             frame = [frame]
-            x = self.xp.asarray(frame).astype(np.float32)
+            # gpu を使っていれば、cupy に、使ってなければ numpyに変換。されに、0軸 と 1軸を入れ替えて転置
+            x = self.xp.asarray(frame).astype(np.float32).transpose((1, 0, 2))
             with chainer.using_config('train', False):
                 with chainer.using_config('enable_backprop', False):
                     y = self.model(x)
