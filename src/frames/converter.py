@@ -10,31 +10,27 @@ from FileManager import FileManager
 class Converter:
     FPS = 2
 
-    def __init__(self, input_path, output_dir):
-        self.input_path = input_path
-        self.output_dir = output_dir
+    def __init__(self):
+        pass
 
-    def main(self):
+    def main(self, input_path, output_dir):
         print()
-        print("<<< Converter class: convert %s into %s as jpg >>>" % (self.input_path, self.output_dir))
+        print("<<< Converter class: convert %s into %s as jpg >>>" % (input_path, output_dir))
 
-        if not os.path.isfile(self.input_path):
+        if not os.path.isfile(input_path):
             raise InputFileNotFoundError
 
-        if not os.path.exists(self.output_dir):
+        if not os.path.exists(output_dir):
             print('>>> create output directory.')
-            os.makedirs(self.output_dir)
+            os.makedirs(output_dir)
 
         print('>>> execute ffmpeg command.')
-        convert_command = "ffmpeg -i "+self.input_path+" -f image2 -vf fps="+str(self.FPS)+' '+self.output_dir+"%04d.jpg"
-
+        convert_command = "ffmpeg -i "+input_path+" -f image2 -vf fps="+str(self.FPS)+' '+output_dir+"%04d.jpg"
         print(convert_command)
-
         result_status = os.system(convert_command)
 
         if result_status != 0:
             raise FfmpegExecuteError
-
         return True
 
 
@@ -49,6 +45,10 @@ class InputFileNotFoundError(Exception):
 
 
 if __name__ == '__main__':
+    #
+    # Example
+    #
+
     # setup Converter
     Converter.FPS = 2
 
@@ -56,6 +56,6 @@ if __name__ == '__main__':
     input_path = '../data/STAIR-actions/stair_action/brushing_teeth/a017-0116C.mp4'
     output_dir = './tmp/'
 
-    converter = Converter(input_path, output_dir)
-    converter.main()
+    converter = Converter()
+    converter.main(input_path, output_dir)
 

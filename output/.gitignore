@@ -1,5 +1,6 @@
 __pycache__/
 cnn/*
+framed_cnn/*
 lstm_frame/*
 model/*
 result/*
