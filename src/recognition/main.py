@@ -108,11 +108,11 @@ if __name__ == "__main__":
     #
 
     # prepare
-    model_dir = './output/model/20180929_091536/'
+    model_dir = './output/model/20180929_121908/'
 
     # params
-    input_video_path = '../data/STAIR-actions/stair_action/throwing_trash/a005-0025C.mp4'
-    lstm_model_path = model_dir + '0002.model'
+    input_video_path = '../data/STAIR-actions/stair_action/drying_hair_with_blower/a013-0150C.mp4'
+    lstm_model_path = model_dir + '0020.model'
     lstm_actions_pkl_path = model_dir + 'actions.pkl'
 
     # execute
