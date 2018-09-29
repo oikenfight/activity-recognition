@@ -13,7 +13,8 @@ from FileManager import FileManager
 class ConverterBatch:
     # constant
     BASE = './src/frames'
-    # コンテナからデータを見れるように deepstation のデータ保管場所を docker-compose にてマウントしてるから、その場所。
+
+    # setup
     FPS = 2
 
     def __init__(self, input_dir, output_base_dir):
@@ -39,22 +40,22 @@ class ConverterBatch:
         all_file_list = self.file_manager.all_file_lists()
         total = len(all_file_list)
 
+        # setup Converter
+        Converter.FPS = self.FPS
+        converter_instance = Converter()
+
         for i, file_list in enumerate(all_file_list):
             video_file_name_without_extension = file_list[1].split('.')[0]  # video_file_name の拡張子を覗いたものをディレクトリ名にする
 
             # params for converter
             input_path = self.input_dir + file_list[0] + '/' + file_list[1]
-            output_dir = self.output_base_dir + self.target_key + '/' + file_list[0] + '/' + video_file_name_without_extension
+            output_dir = self.output_base_dir + self.target_key + '/' + file_list[0] + '/' + video_file_name_without_extension + '/'
 
             # flame_data/{action}/{file_name} ディレクトリを作成
             os.makedirs(output_dir)
 
-            # setup Converter
-            Converter.FPS = self.FPS
-
             # execute
-            converter = Converter(input_path, output_dir)
-            converter.main()
+            converter_instance.main(input_path, output_dir)
 
             print("%s / %s output: %s" % (str(i), str(total), output_dir))
 
