@@ -26,19 +26,22 @@ class Train:
 
     # setup
     GPU_DEVICE = 0
-    EPOCH_NUM = 50
+    EPOCH_NUM = 1000
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
     BACH_SIZE = 10
     TEST_RATE = 0.25
     OVERLAP_SIZE = 4
 
-    def __init__(self, lstm_frame_pkl_path: str):
+    def __init__(self, framed_cnn_pkl_path: str):
         self.xp = np
-        self.lstm_frame_pkl_path = lstm_frame_pkl_path
+        self.framed_cnn_pkl_path = framed_cnn_pkl_path
         self.train_data, self.test_data, self.actions = None, None, None
         self.model, self.optimizer, self.save_dir = None, None, None
         self.save_dir = ''
+
+        self.first_frame_data = []
+        self.first_frame_label = []
 
     def _prepare(self):
         self._load_framed_data()
@@ -59,7 +62,7 @@ class Train:
 
     def _load_framed_data(self):
         self._print_title('Framed Data Loading ...')
-        with open(self.lstm_frame_pkl_path, 'rb') as f:
+        with open(self.framed_cnn_pkl_path, 'rb') as f:
             dataset = pkl.load(f)
         print('data number: ', str(len(dataset['label'])))
         self.train_data, self.test_data = self._shuffle_data(dataset['features'], dataset['label'])
@@ -102,6 +105,9 @@ class Train:
         del loaded_features
         del loaded_label
 
+        print('>>> train_data length: %s, train_label length: %s' % (len(train_data), len(train_label)))
+        print('>>> test_data length: %s, test_label length: %s' % (len(test_data), len(test_label)))
+
         return (np.array(train_data), np.array(train_label)), (np.array(test_data), np.array(test_label))
 
     def _set_model(self) -> ActivityRecognitionModel:
@@ -128,18 +134,27 @@ class Train:
     def main(self):
         self._print_title('main')
         self._prepare()
+        train_loss, test_loss = [], []
+        train_acc, test_acc = [], []
         
         for epoch in range(self.EPOCH_NUM):
             self._print_title('epoch: {}'.format(epoch + 1))
-            # TODO: loss , accuracy 辺りが間違ってそう
-            train_loss = self._train()
-            test_loss = self._test()
+            _train_loss, _train_acc = self._train()
+            _test_loss, _test_acc = self._test()
+
+            # plot loss, plot acc
+            train_loss.append(_train_loss)
+            test_loss.append(_test_loss)
+            train_acc.append(_train_acc)
+            test_acc.append(_test_acc)
             self._loss_plot(epoch, train_loss, test_loss)
+            self._acc_plot(epoch, train_acc, test_acc)
 
             # save model
-            print('>>> save {0:04d}.model'.format(epoch))
-            serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
-            serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
+            if epoch % 10 == 0:
+                print('>>> save {0:04d}.model'.format(epoch))
+                serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
+                serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
 
     def _random_batches(self, data) -> list:
         """
@@ -197,10 +212,10 @@ class Train:
         batch_num = int(len(self.train_data[1])/self.BACH_SIZE)
 
         for i, (feature_batch, label_batch) in enumerate(self._random_batches(self.train_data)):
-            _loss, _acc = self._forward(feature_batch, label_batch)
             self.model.cleargrads()
+            _loss, _acc = self._forward(feature_batch, label_batch)
             _loss.backward()
-            _loss.unchain_backward()  # TODO: これは必要なのだろうか??
+            # _loss.unchain_backward()  # TODO: これは必要なのだろうか??
             self.optimizer.update()
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
@@ -208,8 +223,9 @@ class Train:
             if i % 100 == 0:
                 loop = i + 1
                 print('{} / {} loss: {} accuracy: {}'.format(loop, batch_num, str(np.average(loss)), str(np.average(acc))))
-        print('<<< _train loss: {} accuracy: {}'.format(str(np.average(loss)), str(np.average(acc))))
-        return loss
+        loss_ave, acc_ave = np.average(loss), np.average(acc)
+        print('<<< _train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+        return loss_ave, acc_ave
 
     def _test(self):
         loss, acc = [], []
@@ -220,16 +236,27 @@ class Train:
             # time.sleep(3)
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
-        print('<<< test loss: {} accuracy: {}'.format(str(np.average(loss)), str(np.average(acc))))
-        return loss
+        loss_ave, acc_ave = np.average(loss), np.average(acc)
+        print('<<< test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+        return loss_ave, acc_ave
 
     @staticmethod
     def _loss_plot(epoch, train_loss, test_loss):
-        plt.plot(epoch, np.average(train_loss))
-        plt.plot(epoch, np.average(test_loss))
+        plt.cla()
+        plt.plot(np.arange(epoch+1), np.array(train_loss))
+        plt.plot(np.arange(epoch+1), np.array(test_loss))
         plt.xlabel('epochs')
         plt.ylabel('loss')
         plt.savefig('loss.png')
+
+    @staticmethod
+    def _acc_plot(epoch, train_acc, test_acc):
+        plt.cla()
+        plt.plot(np.arange(epoch+1), np.array(train_acc))
+        plt.plot(np.arange(epoch+1), np.array(test_acc))
+        plt.xlabel('epochs')
+        plt.ylabel('acc')
+        plt.savefig('acc.png')
 
     @staticmethod
     def _print_title(s: str):
@@ -247,7 +274,7 @@ if __name__ == '__main__':
     Train.GPU_DEVICE = 0
 
     # params
-    lstm_frame_pkl_path = './output/framed_cnn/20180929_075743.pkl'
+    framed_cnn_pkl_path = './output/framed_cnn/20180929_075743.pkl'
 
-    train = Train(lstm_frame_pkl_path)
+    train = Train(framed_cnn_pkl_path)
     train.main()
