@@ -32,8 +32,8 @@ class ActivityRecognitionModel(chainer.Chain):
         """
         self.lstm.reset_state()
         for x in xs:
-            h1 = self.image_vec(x)
-            h2 = self.lstm(h1)
-        return self.output(h2)
+            h1 = self.image_vec(F.dropout(x, ratio=self.dropout_ratio))
+            h2 = self.lstm(F.dropout(h1, ratio=self.dropout_ratio))
+        return self.output(F.dropout(h2, ratio=self.dropout_ratio))
 
 
