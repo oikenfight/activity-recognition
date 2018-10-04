@@ -4,3 +4,5 @@
 /data
 /frame_data
 src/__pycache__/
+acc.png
+loss.png

@@ -93,8 +93,8 @@ class Recognition:
         actions_pkl_path = self.lstm_actions_pkl_path
         # setup
         # execute
-        classify_instance = lstm.classify.Classify(self.framed_cnn_features, model_path, actions_pkl_path)
-        classify_instance.main()
+        classify_instance = lstm.classify.Classify(model_path, actions_pkl_path)
+        classify_instance.main(self.framed_cnn_features)
 
     @staticmethod
     def _print_title(string: str):
@@ -108,11 +108,11 @@ if __name__ == "__main__":
     #
 
     # prepare
-    model_dir = './output/model/20180929_121908/'
+    model_dir = './output/model/20181004_031851/'
 
     # params
-    input_video_path = '../data/STAIR-actions/stair_action/drying_hair_with_blower/a013-0150C.mp4'
-    lstm_model_path = model_dir + '0020.model'
+    input_video_path = '../data/STAIR-actions/stair_action/throwing_trash/a005-0014C.mp4'
+    lstm_model_path = model_dir + '0300.model'
     lstm_actions_pkl_path = model_dir + 'actions.pkl'
 
     # execute

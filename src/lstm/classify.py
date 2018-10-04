@@ -20,9 +20,8 @@ class Classify:
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
 
-    def __init__(self, framed_data: np.ndarray, model_path: str, actions_pkl_path: str):
+    def __init__(self, model_path: str, actions_pkl_path: str):
         self.xp = np
-        self.framed_data = framed_data
         self.actions = self._set_actions(actions_pkl_path)      # {index:action_name} 辞書
         self.model = self._set_model(model_path)
         self._to_gpu()
@@ -38,6 +37,7 @@ class Classify:
     def _set_model(self, path: str) -> ActivityRecognitionModel:
         self._print_title('set model: %s' % path)
         model = ActivityRecognitionModel(self.FEATURE_SIZE, self.HIDDEN_SIZE, len(self.actions))
+        serializers.load_hdf5(path, model)
         model.to_gpu()
         return model
 
@@ -47,10 +47,10 @@ class Classify:
             self.xp = cuda.cupy
             self.model.to_gpu(self.GPU_DEVICE)
 
-    def main(self):
+    def main(self, frame_data: np.ndarray) -> tuple:
         self._print_title('main method.')
-
-        for frame in self.framed_data:
+        print(self.xp.asarray(frame_data).shape)
+        for frame in frame_data:
             # ActivityRecognitionModel で batch_size を取得する部分があるため、1段階無駄にネストしてサイズを shape を統一
             frame = [frame]
             # gpu を使っていれば、cupy に、使ってなければ numpyに変換。されに、0軸 と 1軸を入れ替えて転置
@@ -58,12 +58,13 @@ class Classify:
             with chainer.using_config('train', False):
                 with chainer.using_config('enable_backprop', False):
                     y = self.model(x)
-                    output = F.softmax(y).data[0]
+                    output = F.softmax(y).data
                     max_value, max_index = float(output.max()), int(output.argmax())
             print('>>> result')
             print(output)
             print('max_index:', str(max_index), 'max:', str(max_value))
             self._predict_action(max_index)
+            return max_index, max_value
 
     def _predict_action(self, max_index: int):
         self._print_title('result action')
@@ -77,10 +78,35 @@ class Classify:
 
 
 if __name__ == '__main__':
-    frame_data = np.ndarray([])    # TODO: cnn で特徴抽出済みのフレームデータ
-    model_path = 'something'
-    actions_path = 'something'
+    #
+    # 学習に使ったデータを使って試す。
+    #
+    model_path = './output/model/20181004_060624/0060.model'
+    actions_path = './output/model/20181004_060624/actions.pkl'
 
-    classify = Classify(frame_data, model_path, actions_path)
-    # _train.to_gpu(0)
-    classify.main()
+    # params
+    framed_cnn_pkl_path = './output/framed_cnn/20180929_075743.pkl'
+    with open(framed_cnn_pkl_path, 'rb') as f:
+        dataset = pkl.load(f)
+    print('data number: ', str(len(dataset['label'])))
+    actions = dataset['actions_dict']
+    features = dataset['features']
+    labels = dataset['label']
+
+    # 正解率
+    acc = 0
+
+    # execute
+    classify = Classify(model_path, actions_path)
+    for i, (frame, label) in enumerate(zip(features, labels)):
+        frame_data = np.array([frame])
+        max_index, max_value = classify.main(frame_data)
+        if max_index == label:
+            acc += 1
+        print('結果: %s, 正解: %s, 確率: %s' % (max_index, label, max_value))
+        print('正解率:' + str(acc/(i+1)))
+        time.sleep(0.5)
+
+
+
+
