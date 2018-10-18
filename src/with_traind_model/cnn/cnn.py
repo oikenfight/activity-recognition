@@ -94,7 +94,7 @@ if __name__ == "__main__":
     test_dir_path = './tmp/'
 
     # set up
-    Cnn.MODEL_PATH = './src/cnn/VGG_ILSVRC_19_layers.caffemodel'
+    Cnn.MODEL_PATH = './src/with_trained_model/cnn/VGG_ILSVRC_19_layers.caffemodel'
     Cnn.GPU_DEVICE = 0
 
     #
