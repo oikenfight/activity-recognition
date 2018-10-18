@@ -101,7 +101,7 @@ class FileManager:
 
 if __name__ == '__main__':
     # 探索したいディレクトリを指定してからインスタンス化する
-    FileManager.BASE_DIR = './output/cnn'
+    FileManager.BASE_DIR = './src/jpg_converter/data'
     file_manager = FileManager()
 
     print('===== all dirs ==================')
