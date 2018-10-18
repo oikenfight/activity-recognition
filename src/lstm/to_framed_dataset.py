@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
     # setup
     # params
-    input_cnn_dir = './output/cnn/20180929_075743/'
+    input_cnn_dir = './output/cnn/20180929_105046/'
     output_dir = './output/framed_cnn/'
 
     # execute
