@@ -151,7 +151,7 @@ class Train:
             self._acc_plot(epoch, train_acc, test_acc)
 
             # save model
-            if epoch % 10 == 0:
+            if epoch % 30 == 0:
                 print('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
@@ -274,7 +274,7 @@ if __name__ == '__main__':
     Train.GPU_DEVICE = 0
 
     # params
-    framed_cnn_pkl_path = './output/framed_cnn/20180929_075743.pkl'
+    framed_cnn_pkl_path = './output/framed_cnn/20180929_105046.pkl'
 
     train = Train(framed_cnn_pkl_path)
     train.main()

@@ -9,41 +9,55 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from FileManager import FileManager
 
 
-class Dataset:
-    # TASK: 要セットアップ
-    BASE = '.'
-    INPUT_FILES_BASE = '.'
-    OUTPUT_FILE_DIR = './output/lstm_frame/'
+class FrameCreator:
+    """
+    指定したディレクトリ内の pkl ファイルを全て読み込み、
+    クラス変数で指定した FRAME_SIZE に分割した 1 つの pkl ファイルを生成する。
+    label と features のデータは対応。
+    ex)
+    output_pkl_data = {
+        'label': [0, 0, 0, ..., 1, 1, 1, ..., n, n, n],
+        'features': [
+                [[cnn_vec_0], [cnn_vec_1], ..., [cnn_vec_FEATURE_SIZE]],
+                [[cnn_vec_0], [cnn_vec_1], ..., [cnn_vec_FEATURE_SIZE]],
+                ...
+            ],
+        'actions_dict': {
+                '0': 'some action 0',
+                '1': 'some action 1',
+                ...
+                'n': 'some action N',
+            },
+    }
+    """
+
+    # constant
+    BASE = './src/lstm/'
+
+    # setup
     FEATURE_SIZE = 4096
-    GPU_ID = 0
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
 
-    def __init__(self):
-        self.to_gpu()
-        self.all_files = self.load_input_files()  # List(str)
+    def __init__(self, input_cnn_dir: str, output_dir: str):
+        self.input_cnn_dir = input_cnn_dir
+        self.output_dir = output_dir
         self.actions = {}
-        # list のが処理が速いらしいから、あえて numpy じゃなくて list にしてみた。
-        # self.label_data = np.empty(0, int)
-        # self.features_data = np.empty((0, self.FRAME_SIZE, self.FEATURE_SIZE), float)
         self.features_data = []
         self.label_data = []
-        self.load()
 
-    def to_gpu(self):
-        print('use gup')
-        cuda.check_cuda_available()
-        cuda.get_device(self.GPU_ID).use()
-
-    def load_input_files(self):
-        FileManager.BASE_DIR = self.INPUT_FILES_BASE
+    @staticmethod
+    def _load_all_pkl_files(input_cnn_dir):
+        FileManager.BASE_DIR = input_cnn_dir
         file_manager = FileManager()
         return file_manager.all_files()
 
-    def load(self):
+    def main(self):
         print('Dataset Loading ...')
-        print('action length: ', str(len(self.all_files)))
-        for i, pkl_file in enumerate(self.all_files):
+        all_pkl_files = self._load_all_pkl_files(self.input_cnn_dir)
+        print('action length: ', str(len(all_pkl_files)))
+
+        for i, pkl_file in enumerate(all_pkl_files):
             print('=================================')
             print(pkl_file)
 
@@ -72,13 +86,20 @@ class Dataset:
                     self.features_data += [frame_data]
 
                 if k % 50 == 0:
-                    # print(str(k), '/', len(dataset), ':', folder_name, ', data:', self.features_data.shape, ', label:', self.label_data.shape)
                     print(str(k), '/', len(dataset), ':', folder_name, ', data:(', len(self.features_data), len(self.features_data[0]), len(self.features_data[0][0]), '), label:', len(self.label_data))
+        # dump to
+        self._dump_to_framed_pkl()
 
     def _output_file_name(self):
-        return self.OUTPUT_FILE_DIR + datetime.now().strftime("%Y%m%d_%H%M%S") + '.pkl'
+        """
+        入力したディレクトリの最後（日付部分）を引用して出力ファイル名を決定する
+        :return str:
+        """
+        # expected self.input_cnn_dir: '/path/to/output/cnn/{datetime}/'
+        base_cnn_dir_name = self.input_cnn_dir.split('/')[-2]
+        return self.output_dir + base_cnn_dir_name + '.pkl'
 
-    def dump_to_framed_pkl(self):
+    def _dump_to_framed_pkl(self):
         print('dumping to ...')
         print(len(self.features_data))
 
@@ -93,10 +114,18 @@ class Dataset:
 
 
 if __name__ == "__main__":
-    # set up
-    Dataset.BASE = './src/lstm/'
-    # Dataset.INPUT_FILES_BASE = './output/cnn/20180908_051340'
-    Dataset.INPUT_FILES_BASE = './output/cnn/20180913_083117'
-    OUTPUT_FILE_DIR = './output/lstm_frame/'
-    dataset = Dataset()
-    dataset.dump_to_framed_pkl()
+    #
+    # Example
+    #
+
+    # setup
+    # params
+    input_cnn_dir = './output/cnn/20180929_105046/'
+    output_dir = './output/framed_cnn/'
+
+    # execute
+    frame_creator_instance = FrameCreator(input_cnn_dir, output_dir)
+    frame_creator_instance.main()
+
+
+
