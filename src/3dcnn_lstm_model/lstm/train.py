@@ -21,8 +21,9 @@ from FileManager import FileManager
 
 
 class Train:
-    # Train constants
-    OUTPUT_BASE = './output/model/'
+    # Train constant
+    INPUT_IMAGE_DIR = '/converted_data/{datetime}/'
+    OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
 
     # setup
     GPU_DEVICE = 0
@@ -33,18 +34,19 @@ class Train:
     TEST_RATE = 0.25
     OVERLAP_SIZE = 4
 
-    def __init__(self, framed_cnn_pkl_path: str):
+    def __init__(self):
         self.xp = np
-        self.framed_cnn_pkl_path = framed_cnn_pkl_path
-        self.train_data, self.test_data, self.actions = None, None, None
+        self.actions = {}    # ラベル:アクション名 索引辞書
+        self.videos = self.xp.array([])     # video ファイルまでのパスを格納（labels と順一致）
+        self.labels = self.xp.array([])     # 各 video の正解ラベルを格納（videos を順一致）
+        self.train_indexes = self.xp.array([])
+        self.test_indexes = self.xp.array([])
         self.model, self.optimizer, self.save_dir = None, None, None
         self.save_dir = ''
 
-        self.first_frame_data = []
-        self.first_frame_label = []
-
     def _prepare(self):
-        self._load_framed_data()
+        self._load_data()
+        self._shuffle_data()
         self._set_model()
         self._set_optimizer()
         self._make_save_dir()
@@ -54,63 +56,62 @@ class Train:
     def _to_gpu(self):
         if self.GPU_DEVICE >= 0:
             self._print_title('use gpu')
-            # self.xp = cuda.cupy
             self.xp = cupy
             self.model.to_gpu(self.GPU_DEVICE)
             print()
             print(type(self.xp))
 
-    def _load_framed_data(self):
-        self._print_title('Framed Data Loading ...')
-        with open(self.framed_cnn_pkl_path, 'rb') as f:
-            dataset = pkl.load(f)
-        print('data number: ', str(len(dataset['label'])))
-        self.train_data, self.test_data = self._shuffle_data(dataset['features'], dataset['label'])
-        self.actions = dataset['actions_dict']
+    def _load_data(self):
+        """
+        画像
+        :return void:
+        """
+        FileManager.BASE_DIR = self.INPUT_IMAGE_DIR
+        file_manager = FileManager()
 
-    def _shuffle_data(self, loaded_features, loaded_label):
+        # setup
+        current_action = ''
+        current_label = 0
+        videos = []
+        labels = []
+
+        for path_list in file_manager.all_dir_lists():
+            """
+            path_list[0]: アクション名
+            path_list[1]: ビデオ名
+            """
+            # 必要なパスを取得
+            path = path_list.join('/')
+            # アクションが更新されたら状態を変更する
+            if not path_list[0] == current_action:
+                self.actions[len(self.actions)] = path_list[0]
+                current_action = path_list[0]
+                current_label = len(self.actions)
+            # 各データを追加
+            videos.append(path)
+            labels.append(current_label)
+        # インスタンス変数に値をセット
+        self.videos = self.xp.array(videos)
+        self.labels = self.xp.array(labels)
+
+    def _shuffle_data(self):
         """
         任意の割合でランダムに訓練データとテストデータの tuple を返却する
-        :return tuple (_train, test):
-            (
-                ([features, features, ...], [label, label, ...]),
-                ([features, features, ...], [label, label, ...])
-            )
+        :return void:
         """
         self._print_title('shuffle data to train and test')
 
         # index（データ数配列）をランダムに並び替え、2つにデータを分ける
-        test_num = int(len(loaded_label) * self.TEST_RATE)
-        indexes = np.array(range(len(loaded_label)))
+        test_num = int(len(self.labels) * self.TEST_RATE)
+        indexes = np.array(range(len(self.labels)))
         np.random.shuffle(indexes)
-        train_indexes = indexes[test_num:]
-        test_indexes = indexes[:test_num]
 
-        # 空の _train, test データを生成
-        train_data, train_label = [], []
-        test_data, test_label = [], []
-
-        # TASK: データが増えたらこの辺で MemoryError 起こすかも。。
-        # 各々作成したランダムな index からデータを追加
-        print('>>> create train data')
-        for i in train_indexes:
-            train_data += [loaded_features[i]]
-            train_label += [loaded_label[i]]
-        print('>>> create test data')
-        for i in test_indexes:
-            test_data += [loaded_features[i]]
-            test_label += [loaded_label[i]]
-
-        # メモリ開放のため
-        del loaded_features
-        del loaded_label
-
-        print('>>> train_data length: %s, train_label length: %s' % (len(train_data), len(train_label)))
-        print('>>> test_data length: %s, test_label length: %s' % (len(test_data), len(test_label)))
-
-        return (np.array(train_data), np.array(train_label)), (np.array(test_data), np.array(test_label))
+        # シャッフルされた index を train, test にそれぞれ振り分け格納
+        self.train_indexes = indexes[test_num:]
+        self.test_indexes = indexes[:test_num]
 
     def _set_model(self) -> ActivityRecognitionModel:
+        # TODO: モデルを作成
         self._print_title('set model:')
         self.model = ActivityRecognitionModel(self.FEATURE_SIZE, self.HIDDEN_SIZE, len(self.actions))
 
@@ -132,6 +133,10 @@ class Train:
             pkl.dump(self.actions, f, pkl.HIGHEST_PROTOCOL)
 
     def main(self):
+        """
+        学習を開始する
+        :return:
+        """
         self._print_title('main')
         self._prepare()
         train_loss, test_loss = [], []
@@ -139,6 +144,8 @@ class Train:
         
         for epoch in range(self.EPOCH_NUM):
             self._print_title('epoch: {}'.format(epoch + 1))
+
+            # TODO: ここから。
             _train_loss, _train_acc = self._train()
             _test_loss, _test_acc = self._test()
 
@@ -156,38 +163,44 @@ class Train:
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
 
-    def _random_batches(self, data) -> list:
+    def _train(self):
+        loss, acc = [], []
+        batch_num = int(len(self.train_indexes) / self.BACH_SIZE)
+
+        for i, (video_batch, label_batch) in enumerate(self._random_batches(self.train_indexes)):
+            self.model.cleargrads()
+            _loss, _acc = self._forward(video_batch, label_batch)
+            _loss.backward()
+            self.optimizer.update()
+            loss.append(_loss.data.tolist())
+            acc.append(_acc.data.tolist())
+
+            if i % 100 == 0:
+                loop = i + 1
+                print('{} / {} loss: {} accuracy: {}'.format(loop, batch_num, str(np.average(loss)), str(np.average(acc))))
+        loss_ave, acc_ave = np.average(loss), np.average(acc)
+        print('<<< _train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+        return loss_ave, acc_ave
+
+    def _test(self):
+        loss, acc = [], []
+        for i, (feature_batch, label_batch) in enumerate(self._random_batches(self.test_indexes)):
+            _loss, _acc = self._forward(feature_batch, label_batch, train=False)
+            loss.append(_loss.data.tolist())
+            acc.append(_acc.data.tolist())
+        loss_ave, acc_ave = np.average(loss), np.average(acc)
+        print('<<< test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+        return loss_ave, acc_ave
+
+    def _random_batches(self, indexes) -> list:
         """
-        train_data をランダムにバッチサイズずつに分割したデータ・ラベルのリストを返却する
+        index をランダムな順番で、バッチサイズずつに分割したビデオ・ラベルのリストを返却する
         :return:
-            [
-                # （全データ/バッチサイズ）回繰り返し（各要素が対応）
-                (
-                    # バッチサイズの時系列画像特徴データ
-                    [
-                        [[feature], [feature], ... [feature]],
-                        [[feature], [feature], ... [feature]],
-                        ....
-                    ],
-                    # バッチサイズの時系列画像特徴データ
-                    [
-                        [label],
-                        [label],
-                        ...
-                    ]
-                ),
-                ....
-            ]
         """
-        # batches = []
-        length = len(data[1])
-        index = np.arange(length, dtype=np.int32)
-        np.random.shuffle(index)
-        for i in range(0, length, self.BACH_SIZE):
-            batch_indexes = index[i:i+self.BACH_SIZE]
-            # batches.append((data[0][batch_indexes], data[1][batch_indexes]))
-            yield (data[0][batch_indexes], data[1][batch_indexes])
-        # return batches
+        np.random.shuffle(indexes)
+        for i in range(0, len(indexes), self.BACH_SIZE):
+            batch_indexes = indexes[i:i+self.BACH_SIZE]
+            yield (self.videos[batch_indexes], self.labels[batch_indexes])
 
     def _forward(self, feature_batch: np.ndarray, label_batch: np.ndarray, train=True):
         # 0軸 と 1軸を入れ替えて転置
@@ -206,39 +219,6 @@ class Train:
                 #     print('==== label ==========================')
                 #     print(t)
         return loss, accuracy
-
-    def _train(self):
-        loss, acc = [], []
-        batch_num = int(len(self.train_data[1])/self.BACH_SIZE)
-
-        for i, (feature_batch, label_batch) in enumerate(self._random_batches(self.train_data)):
-            self.model.cleargrads()
-            _loss, _acc = self._forward(feature_batch, label_batch)
-            _loss.backward()
-            # _loss.unchain_backward()  # TODO: これは必要なのだろうか??
-            self.optimizer.update()
-            loss.append(_loss.data.tolist())
-            acc.append(_acc.data.tolist())
-
-            if i % 100 == 0:
-                loop = i + 1
-                print('{} / {} loss: {} accuracy: {}'.format(loop, batch_num, str(np.average(loss)), str(np.average(acc))))
-        loss_ave, acc_ave = np.average(loss), np.average(acc)
-        print('<<< _train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
-        return loss_ave, acc_ave
-
-    def _test(self):
-        loss, acc = [], []
-        for i, (feature_batch, label_batch) in enumerate(self._random_batches(self.test_data)):
-            _loss, _acc = self._forward(feature_batch, label_batch, train=False)
-            # print('loss:', loss)
-            # print('acc:', acc)
-            # time.sleep(3)
-            loss.append(_loss.data.tolist())
-            acc.append(_acc.data.tolist())
-        loss_ave, acc_ave = np.average(loss), np.average(acc)
-        print('<<< test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
-        return loss_ave, acc_ave
 
     @staticmethod
     def _loss_plot(epoch, train_loss, test_loss):
@@ -272,9 +252,10 @@ class Train:
 if __name__ == '__main__':
     # setup
     Train.GPU_DEVICE = 0
-
+    Train.INPUT_IMAGE_DIR = '/converted_data/{datetime}/'
+    Train.OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
     # params
-    framed_cnn_pkl_path = './output/framed_cnn/20180929_105046.pkl'
+    # execute
 
-    train = Train(framed_cnn_pkl_path)
+    train = Train()
     train.main()
