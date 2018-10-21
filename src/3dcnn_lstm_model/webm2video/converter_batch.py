@@ -4,15 +4,15 @@ import sys
 import time
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
-from webm_converter import WebmConverter
+from converter import Converter
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from FileManager import FileManager
 
 
-class WebmConverterBatch:
+class ConverterBatch:
     # constant
-    BASE = './src/3dcnn_lstm_model/webm_converter'
+    BASE = './src/3dcnn_lstm_model/webm2video'
 
     # setup
     FRAME_RATE = 30
@@ -41,8 +41,8 @@ class WebmConverterBatch:
         total = len(all_file_list)
 
         # setup Converter
-        WebmConverter.FRAME_RATE = self.FRAME_RATE
-        webm_converter_instance = WebmConverter()
+        Converter.FRAME_RATE = self.FRAME_RATE
+        converter_instance = Converter()
 
         for i, file_list in enumerate(all_file_list):
             # params for converter
@@ -50,7 +50,7 @@ class WebmConverterBatch:
             output_dir = self.output_base_dir + self.target_key + '/' + file_list[0] + '/'
 
             # execute
-            webm_converter_instance.main(input_path, output_dir)
+            converter_instance.main(input_path, output_dir)
 
             print("%s / %s output: %s" % (str(i), str(total), output_dir))
 
@@ -61,12 +61,12 @@ if __name__ == "__main__":
     #
 
     # setup
-    WebmConverterBatch.FRAME_RATE = 30
+    ConverterBatch.FRAME_RATE = 30
 
     # params
     input_dir = '/data/original-actions/webm/actions/'
     output_dir = '/data/original-actions/actions/'
 
     # execute
-    webm_converter_batch_instance = WebmConverterBatch(input_dir, output_dir)
-    webm_converter_batch_instance.main()
+    converter_batch_instance = ConverterBatch(input_dir, output_dir)
+    converter_batch_instance.main()
