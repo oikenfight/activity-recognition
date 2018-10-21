@@ -1,7 +1,8 @@
 __pycache__/
-cnn/*
-framed_cnn/*
-lstm_frame/*
-model/*
-result/*
-recognition/*
+with_trained_model/cnn/*
+with_trained_model/framed_cnn/*
+with_trained_model/model/*
+with_trained_model/result/*
+with_trained_model/recognition/*
+3dcnn_lstm_model/models/*
+3dcnn_lstm_model/recognitions/*
