@@ -5,7 +5,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from FileManager import FileManager
 
 
-class WebmConverter:
+class Converter:
     FRAME_RATE = 30
 
     def main(self, input_webm_path: str, output_dir: str):
@@ -47,11 +47,11 @@ if __name__ == '__main__':
     #
 
     # setup Converter
-    WebmConverter.FPS = 2
+    Converter.FPS = 2
 
     # Test input file path
     input_webm_path = '../data/original-actions/actions/test2/ID0057_test2.webm'
     output_dir = './tmp/'
 
-    converter = WebmConverter()
+    converter = Converter()
     converter.main(input_webm_path, output_dir)
