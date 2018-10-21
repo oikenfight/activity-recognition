@@ -12,7 +12,7 @@ from FileManager import FileManager
 
 class ConverterBatch:
     # constant
-    BASE = './src/3dcnn_lstm_model/jpg_converter'
+    BASE = './src/3dcnn_lstm_model/video2img'
 
     # setup
     FPS = 2
