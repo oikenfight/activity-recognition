@@ -1,4 +1,5 @@
-from . import ActivityRecognitionModel
-from . import train
-from . import classify
-from . import to_framed_dataset
+import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from img2vec import *
