@@ -1,6 +1,12 @@
 import os
 import copy
 
+"""
+もっと簡単にできたなぁ。。
+サブディレクトリまで再帰的に欲しかったから作ったけど、全然あったし。。これいらんくない？
+https://qiita.com/amowwee/items/e63b3610ea750f7dba1b
+"""
+
 
 class FileManager:
     # 使用場所ににって適切なディレクトリを指定してからインスタンス化する
