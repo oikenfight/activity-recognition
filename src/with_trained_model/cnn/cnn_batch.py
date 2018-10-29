@@ -103,7 +103,7 @@ if __name__ == "__main__":
     #
 
     # setup
-    BASE = './src/with_traind_model/cnn/'
+    BASE = './src/with_trained_model/cnn/'
     MODEL_PATH = BASE + 'VGG_ILSVRC_19_layers.caffemodel'
     GPU_DEVICE = 0
 
