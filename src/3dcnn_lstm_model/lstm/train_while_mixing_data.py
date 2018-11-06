@@ -55,6 +55,7 @@ class Train:
     # 学習に使用するデータ数は KEPT_FRAME_SIZE だが、保持するデータ数は KEPT_FRAME_SIZE + THREAD_SIZE となる
     # （学習時に index からデータを拾う際に、kept_data が更新中で IndexError となる可能性を防ぐため。）
     KEPT_FRAME_SIZE = 100
+    KEPT_TEST_FRAME_SIZE = 100
     THREAD_SIZE = 20
 
     def __init__(self):
@@ -64,7 +65,11 @@ class Train:
         self.labels = np.array([], dtype=np.int8)  # 各 video の正解ラベルを格納（frames, images と順同一）
         self.train_indexes = np.array([], dtype=np.int32)
         self.test_indexes = np.array([], dtype=np.int32)
+
+        # chainer 由来のやつら
         self.model, self.optimizer, self.save_dir = None, None, None
+
+        # その他、フラグ
         self.save_dir = ''
         self.update_running = True
 
@@ -75,6 +80,12 @@ class Train:
         self.kept_labels = np.empty(self.KEPT_FRAME_SIZE, dtype=np.int8)    # kept_frames に順対応した正解ラベルを格納
         self.kept_images_vec = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_COLOR), dtype=np.float32)  # kept_frames に順対応したベクトルデータを格納
 
+        # 学習と同様にテストデータも保持する
+        self.kept_test_indexes = np.empty(self.KEPT_TEST_FRAME_SIZE, dtype=np.int32)
+        self.kept_test_frames = np.empty((self.KEPT_TEST_FRAME_SIZE, self.FRAME_SIZE), dtype='S96')
+        self.kept_test_labels = np.empty(self.KEPT_TEST_FRAME_SIZE, dtype=np.int8)
+        self.kept_test_images_vec = np.empty((self.KEPT_TEST_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_COLOR), dtype=np.float32)
+
     def _prepare(self):
         self._load_frames_and_labels()
         self._shuffle_data()
@@ -83,7 +94,7 @@ class Train:
         self._make_save_dir()
         self._dump_actions_data()
         self._to_gpu()
-        self._set_init_keeping_images()
+        self._set_init_kept_images()
         # スレッドでランダムに常時データを更新する
         thread = threading.Thread(target=self._update_keeping_images_constantly_thread)
         thread.start()
@@ -180,12 +191,12 @@ class Train:
         with open(path, 'wb') as f:
             pkl.dump(self.actions, f, pkl.HIGHEST_PROTOCOL)
 
-    def _set_init_keeping_images(self):
+    def _set_init_kept_images(self):
         """
         学習のために保持する画像の初期データを読み込む。
         :return:
         """
-        print('>>> _set_init_keeping_images')
+        print('>>> _set_init_kept_images')
         # indexes = np.array(range(len(self.labels)))
         np.random.shuffle(self.train_indexes)
         init_kept_indexes = self.train_indexes[:self.KEPT_FRAME_SIZE]
