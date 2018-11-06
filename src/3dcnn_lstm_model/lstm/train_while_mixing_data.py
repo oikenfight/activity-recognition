@@ -45,36 +45,35 @@ class Train:
     EPOCH_NUM = 100000
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
-    BACH_SIZE = 128
+    BACH_SIZE = 20
     TEST_RATE = 0.2
-    IMAGE_HEIGHT = 240
-    IMAGE_WIDTH = 320
+    IMAGE_HEIGHT = 180
+    IMAGE_WIDTH = 240
     IMAGE_COLOR = 3
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
     # 学習に使用するデータ数は KEPT_FRAME_SIZE だが、保持するデータ数は KEPT_FRAME_SIZE + THREAD_SIZE となる
     # （学習時に index からデータを拾う際に、kept_data が更新中で IndexError となる可能性を防ぐため。）
-    KEPT_FRAME_SIZE = 3200
+    KEPT_FRAME_SIZE = 100
     THREAD_SIZE = 20
 
     def __init__(self):
         self.xp = np
         self.actions = {}  # ラベル:アクション名 索引辞書
-        self.frames = np.array([])  # フレームに区切られたビデオ（時系列画像）のパスデータを格納（labels, images と順同一）
-        self.labels = np.array([])  # 各 video の正解ラベルを格納（frames, images と順同一）
-        self.train_indexes = np.array([]).astype(np.int32)
-        self.test_indexes = np.array([]).astype(np.int32)
+        self.frames = np.array([], dtype=str)  # フレームに区切られたビデオ（時系列画像）のパスデータを格納（labels, images と順同一）
+        self.labels = np.array([], dtype=np.int8)  # 各 video の正解ラベルを格納（frames, images と順同一）
+        self.train_indexes = np.array([], dtype=np.int32)
+        self.test_indexes = np.array([], dtype=np.int32)
         self.model, self.optimizer, self.save_dir = None, None, None
         self.save_dir = ''
         self.update_running = True
 
         # 学習に使用するデータを常にランダムに更新しながら保持（全データはメモリの都合上読み込めないため。）
-        # frames, labels は順同一
-        self.kept_frames = np.chararray((0, 8))    # 現在学習可能な各フレームの時系列画像のパスデータ(str array)を格納
-        self.kept_labels = np.empty(0).astype(np.int32)         # kept_frames に順対応した正解ラベルを格納
-        # images, images_vec は順同一
-        self.kept_images = np.chararray(self.KEPT_FRAME_SIZE * self.FRAME_SIZE)  # 画像パスデータを格納(str)
-        self.kept_images_vec = np.empty((self.KEPT_FRAME_SIZE * self.FRAME_SIZE, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_COLOR)).astype(np.float32) # kept_images に順対応したベクトルデータを格納
+        # indexes, frames, labels, images_vec は順同一
+        self.kept_indexes = np.empty(self.KEPT_FRAME_SIZE, dtype=np.int32)   # 現在学習に用いているなデータの index を格納
+        self.kept_frames = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE), dtype='S96')  # 現在学習に用いている各フレームの時系列画像のパスデータ(str array)を格納
+        self.kept_labels = np.empty(self.KEPT_FRAME_SIZE, dtype=np.int8)    # kept_frames に順対応した正解ラベルを格納
+        self.kept_images_vec = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_COLOR), dtype=np.float32)  # kept_frames に順対応したベクトルデータを格納
 
     def _prepare(self):
         self._load_frames_and_labels()
@@ -194,31 +193,20 @@ class Train:
         current_index = 0
         for i in range(0, self.KEPT_FRAME_SIZE + self.THREAD_SIZE, self.THREAD_SIZE):
             target_indexes = init_kept_indexes[i:i+self.THREAD_SIZE]
-            tmp_kept_images = []
-            tmp_kept_images_vec = []
-            # images_data: list of tuple ([images_path], [images_vec], 'label')
+            # images_data: list of tuple (target_index, [frame], [images_vec], label)
             images_data = self._load_images_from_frame_indexes(target_indexes)
-            for j in range(len(images_data)):
-                for k in range(self.FRAME_SIZE):
-                    self.kept_images[current_index] = np.array(images_data[j][0][k])
-                    self.kept_images_vec[current_index] = np.array(images_data[j][1][k])
-                    current_index += 1
-                # tmp_kept_images += images_data[j][0]
-                # tmp_kept_images_vec += images_data[j][1]
-                images_data[j] = None
-            # 初期画像データをセット（ここで numpy に変換するとやや遅いけど、メモリ節約のため。）
-            # self.kept_images = np.append(self.kept_images, tmp_kept_images)
-            # self.kept_images_vec = np.append(self.kept_images_vec, tmp_kept_images_vec, axis=0)
-            print('init keeping data:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_FRAME_SIZE))
 
-        # 初期 keeping_data をセット
-        self.kept_frames = self.frames[init_kept_indexes]
-        self.kept_labels = self.labels[init_kept_indexes]
+            for j in range(len(images_data)):
+                self.kept_indexes[current_index] = images_data[j][0]
+                self.kept_frames[current_index] = np.array(images_data[j][1], dtype=str)
+                self.kept_images_vec[current_index] = np.array(images_data[j][2], dtype=np.float32)
+                self.kept_labels[current_index] = images_data[j][3]
+                current_index += 1
+            print('init keeping data:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_FRAME_SIZE))
 
         print('>>>>>>> all child threads are completed.')
         print('self.kept_frames shape:', self.kept_frames.shape)
         print('self.kept_labels shape:', self.kept_labels.shape)
-        print('self.kept_images shape:', self.kept_images.shape)
         print('self.kept_images_vec shape:', self.kept_images_vec.shape)
 
     def _update_keeping_images_constantly_thread(self):
@@ -231,49 +219,31 @@ class Train:
             if not self.update_running:
                 time.sleep(10)
             else:
-                time.sleep(2)
+                time.sleep(3)
 
             np.random.shuffle(self.train_indexes)
             added_target_indexes = self.train_indexes[:self.THREAD_SIZE]
-            kept_images_data = self._load_images_from_frame_indexes(added_target_indexes)
+            # images_data: list of tuple (target_index, [frame], [images_vec], label)
+            images_data = self._load_images_from_frame_indexes(added_target_indexes)
 
             # 削除するデータを決定・取得
             random_indexes = np.array(range(self.KEPT_FRAME_SIZE))
             np.random.shuffle(random_indexes)
-            removed_kept_frame_indexes = random_indexes[:self.THREAD_SIZE]
-            removed_kept_label_indexes = removed_kept_frame_indexes
-            removed_frames = self.frames[removed_kept_frame_indexes]
+            removed_target_indexes = random_indexes[:self.THREAD_SIZE]
 
-            removed_image_indexes = []
-            removed_image_vec_indexes = []
-            for removed_frame in removed_frames:
-                """ removed_frame: str list of image_path """
-                for removed_image in removed_frame:
-                    """ removed_image: str """
-                    # removed_image（str: 削除対象となる画像のパス）の index を探す
-                    removed_target_index = np.where(self.kept_images == removed_image, 1, 0).argmax()
-                    removed_image_indexes += removed_target_index
-                    removed_image_vec_indexes += removed_target_index
-
-            # 保持するフレーム・ラベルデータを更新
-            self.kept_frames = np.append(self.kept_frames, self.frames[added_target_indexes], axis=0)
-            self.kept_labels = np.append(self.kept_labels, self.labels[added_target_indexes], axis=0)
-            self.kept_frames = np.delete(self.kept_frames, removed_kept_frame_indexes, 0)
-            self.kept_labels = np.delete(self.kept_labels, removed_kept_label_indexes, 0)
-
-            # 保持する画像データを更新
-            for i, removed_image_index in enumerate(removed_image_indexes):
-                self.kept_images[removed_image_index] = kept_images_data[i][0]
-                self.kept_images_vec[removed_image_index] = kept_images_data[i][1]
-                kept_images_data[i] = None
+            for i in range(len(removed_target_indexes)):
+                self.kept_images_vec[removed_target_indexes[i]] = np.array(images_data[i][2], dtype=np.float32)
+                self.kept_indexes[removed_target_indexes[i]] = images_data[i][0]
+                self.kept_frames[removed_target_indexes[i]] = np.array(images_data[i][1], dtype=str)
+                self.kept_labels[removed_target_indexes[i]] = images_data[i][3]
+            print('... updated')
 
     def _load_images_from_frame_indexes(self, target_indexes) -> list:
         """
-        対象となる frames, labels を受け、子スレッドを実行する。
+        対象となるデータの index を受け、子スレッドを実行する。
         images_data: list of tuple ([images_path], [images_vec], 'label') で返却することで、
         受け取る側では、データの格納と同時に images_data[i] = None を代入してメモリ削減させる
-        :param list target_frames:
-        :param list target_labels:
+        :param list target_indexes:
         :return:
         """
         target_frames = self.frames[target_indexes]
@@ -281,9 +251,9 @@ class Train:
         images_data = []
         thread_list = []
         # スレッドをセット
-        for i, (frame, label) in enumerate(zip(target_frames, target_labels)):
+        for i, (target_index, frame, label) in enumerate(zip(target_indexes, target_frames, target_labels)):
             thread = threading.Thread(target=self._load_images_thread,
-                                      args=([frame, label, images_data, i]))
+                                      args=([target_index, frame, label, images_data]))
             thread_list.append(thread)
         # スレッド実行
         for thread in thread_list:
@@ -295,28 +265,24 @@ class Train:
         return images_data
 
     @staticmethod
-    def _load_images_thread(frame: list, label: int, images_data: list, thread_num: int):
+    def _load_images_thread(target_index: int, frame: list, label: int, images_data: list):
         """
         _update_keeping_images_constantly_thread の子スレッドとして呼ばれ、与えられた frame の画像を読み込む。
         マルチスレッドとして働く。
         :param frame:
         :return:
         """
-        time1 = time.time()
         # インスタンスを準備
         img2vec_converter_instance = img2vec.converter.Converter()
         # 画像読み込み
         images = []
         images_vec = []
         for path in frame:
-            # print(path)
             vec = img2vec_converter_instance.main(path)
             images.append(path)
             images_vec.append(vec)
         # バッチデータに結果を追加
-        images_data.append((images, images_vec, label))
-        time2 = time.time()
-        # print('>>>>>> completed thread {}, time: {}'.format(str(thread_num), str(time2 - time1)))
+        images_data.append((target_index, frame, images_vec, label))
 
     def main(self):
         """
@@ -382,18 +348,7 @@ class Train:
         np.random.shuffle(indexes)
         for i in range(0, len(indexes), self.BACH_SIZE):
             batch_indexes = indexes[i:i + self.BACH_SIZE]
-            image_indexes_batch = []
-            for frame in self.kept_frames[batch_indexes]:
-                """ frame: str list of image_path """
-                image_indexes = []
-                for image in frame:
-                    """ image: str """
-                    # image（str: バッチ学習対象となる画像のパス）の index を取得
-                    target_index = np.where(self.kept_images == image, 1, 0).argmax()
-                    image_indexes += [target_index]
-                image_indexes_batch += [image_indexes]
-            images_vec_batch = self.xp.array([self.kept_images_vec[image_indexes] for image_indexes in image_indexes_batch])
-            yield (images_vec_batch, self.kept_labels[batch_indexes])
+            yield self.kept_images_vec[batch_indexes], self.kept_labels[batch_indexes]
 
     def _random_batches_for_test(self) -> list:
         """
@@ -447,7 +402,7 @@ class Train:
         :return:
         """
         # 0軸 と 1軸を入れ替えて転置
-        x = images_vec_batch.astype(np.float32).transpose((1, 0, 2, 3, 4))
+        x = self.xp.array(images_vec_batch).astype(np.float32).transpose((1, 0, 2, 3, 4))
         t = self.xp.array(label_batch).astype(np.int32)
 
         # gpu を使っていれば、cupy に変換される
@@ -490,7 +445,7 @@ class Train:
 if __name__ == '__main__':
     # setup
     Train.GPU_DEVICE = 0
-    Train.INPUT_IMAGE_DIR = '/converted_data/20181030_120708/'
+    Train.INPUT_IMAGE_DIR = '/converted_data/20181106_043229/'
     Train.OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
     # params
     # execute
