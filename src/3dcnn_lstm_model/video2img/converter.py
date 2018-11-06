@@ -9,6 +9,8 @@ from FileManager import FileManager
 
 class Converter:
     FPS = 2
+    WIDTH = 240
+    HEIGHT = 180
 
     def __init__(self):
         pass
@@ -24,8 +26,9 @@ class Converter:
             print('>>> create output directory.')
             os.makedirs(output_dir)
 
+        size_option = '%sx%s ' % (self.WIDTH, self.HEIGHT)
         print('>>> execute ffmpeg command.')
-        convert_command = "ffmpeg -i "+input_path+" -f image2 -vf fps="+str(self.FPS)+' '+output_dir+"%04d.jpg"
+        convert_command = "ffmpeg -i "+input_path+" -f image2 -vf fps="+str(self.FPS)+' -s '+size_option+output_dir+"%04d.jpg"
         print(convert_command)
         result_status = os.system(convert_command)
 
