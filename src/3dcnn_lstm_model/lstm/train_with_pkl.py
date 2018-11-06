@@ -36,7 +36,7 @@ class Train:
     EPOCH_NUM = 10000
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
-    BACH_SIZE = 128
+    BACH_SIZE = 64
     TEST_RATE = 0.25
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
@@ -44,9 +44,8 @@ class Train:
     def __init__(self):
         self.xp = np
         self.actions = {}  # ラベル:アクション名 索引辞書
-        self.frames = np.array([])  # フレームに区切られたビデオ（時系列画像）のパスデータを格納（labels, images と順同一）
-        self.labels = np.array([])  # 各 video の正解ラベルを格納（frames, images と順同一）
-        # self.images = np.empty((0, 8, 270, 360, 3))  # 読み込んだ画像ピクセルデータを格納（frames, labels と順同一）
+        self.frames = np.array([])  # フレームに区切られたビデオ（.pkl）のパスデータを格納（labelsと順同一）
+        self.labels = np.array([])  # 各 video の正解ラベルを格納（framesと順同一）
         self.train_indexes = np.array([])
         self.test_indexes = np.array([])
         self.model, self.optimizer, self.save_dir = None, None, None
@@ -69,9 +68,11 @@ class Train:
 
     def _to_gpu(self):
         if self.GPU_DEVICE >= 0:
-            print('>>> use gpu')
+            self._print_title('use gpu')
             self.xp = cupy
             self.model.to_gpu(self.GPU_DEVICE)
+            print()
+            print(type(self.xp))
 
     def _load_data(self):
         """
@@ -91,10 +92,8 @@ class Train:
         for path_list in file_manager.all_dir_lists():
             """
             path_list[0]: アクション名
-            path_list[1]: ビデオ名
+            path_list[1]: ビデオ名_{start}_{end}.pkl
             """
-            # 必要なパスを取得
-            path = '/'.join(path_list)
             # アクションが更新されたら状態を変更する
             if not path_list[0] == current_action:
                 self.actions[len(self.actions)] = path_list[0]
@@ -102,15 +101,7 @@ class Train:
                 current_label = len(self.actions)
 
             # ビデオ内のファイル一覧を取得
-            files = sorted(glob(self.INPUT_IMAGE_DIR + path + "/*.jpg"))
-
-            # フレームを作成して、ラベルと共に追加
-            for i in range(0, len(files), self.OVERLAP_SIZE):
-                frame = files[i:i + self.FRAME_SIZE]
-                # TODO: 微妙に 8 フレームに足りてないデータを無駄にしてるから、できたら直す（学習する時にフレーム数が一定のほうが楽だから今はこうしてる。）
-                if len(frame) < 8:
-                    break
-                # 追加
+            for frame in sorted(glob(self.INPUT_IMAGE_DIR + path_list[0] + "/*.pkl")):
                 frames.append(frame)
                 labels.append(current_label)
 
@@ -202,7 +193,6 @@ class Train:
         batch_num = int(len(self.train_indexes) / self.BACH_SIZE)
 
         for i, (next_frames_batch, next_label_batch) in enumerate(self._random_batches(self.train_indexes)):
-            # TODO: ホントは下の理由で、コピーすべきだけど、コピーが重い。。から破壊的な状態（データの読み込みのが絶対遅いから、多分大丈夫。。）
             # 前回取得したデータを格納（処理速度的に可能性は低いけど、画像読み込みスレッドが先に終わった場合、インスタンス変数が書き換わるため。）
             images_batch = self.images_batch
             label_batch = self.label_batch
@@ -221,7 +211,10 @@ class Train:
                                                              str(np.average(acc))))
 
             # メインスレッドを除いた実行中のスレッド一覧を取得し、次のバッチデータの読み込みが完了するのを待機
-            prepare_thread.join()
+            thread_list = threading.enumerate()
+            thread_list.remove(threading.main_thread())
+            for thread in thread_list:
+                thread.join()
             print('------ next loop ---------------')
             print()
 
@@ -233,7 +226,6 @@ class Train:
         loss, acc = [], []
 
         for i, (next_frames_batch, next_label_batch) in enumerate(self._random_batches(self.test_indexes)):
-            # TODO: ホントは下の理由で、コピーすべきだけど、コピーが重い。。から破壊的な状態（データの読み込みのが絶対遅いから、多分大丈夫。。）
             # 前回取得したデータを格納（処理速度的に可能性は低いけど、画像読み込みスレッドが先に終わった場合、インスタンス変数が書き換わるため。）
             images_batch = self.images_batch
             label_batch = self.label_batch
@@ -242,13 +234,14 @@ class Train:
             prepare_thread = threading.Thread(target=self._prepare_next_batch_thread, args=([next_frames_batch, next_label_batch]))
             prepare_thread.start()
 
-            # 二回目以降は、前のループで取得したバッチを使ってスレッドで学習も行う
+            # 二回目以降は、前のループで取得したバッチを使って学習を行う（裏でスレッドで次の学習のデータを取得してる状態）
             if not i == 0:
                 # 学習実行
                 loss, acc = self._run(images_batch, label_batch, loss, acc, train=False)
 
             # メインスレッドを除いた実行中のスレッド一覧を取得し、次のバッチデータの読み込みが完了するのを待機
             prepare_thread.join()
+
             print('------ next loop ---------------')
             print()
 
@@ -278,15 +271,16 @@ class Train:
 
         time1 = time.time()
 
+        # 次のバッチに備え、初期化
+        self.images_batch = []
+        self.label_batch = []
+
         thread_list = []
         batches = []
         for i, (frame, label) in enumerate(zip(next_frames_batch, next_label_batch)):
-            load_frame_thread = threading.Thread(target=self._load_frame_and_set_data_thread,
+            load_frame_thread = threading.Thread(target=self._load_frame_pkl_thread,
                                                  args=([frame, label, batches, i]))
             thread_list.append(load_frame_thread)
-
-        time2 = time.time()
-        print(time2 - time1)
 
         # スレッド実行
         for thread in thread_list:
@@ -296,13 +290,8 @@ class Train:
         for thread in thread_list:
             thread.join()
 
-        # TODO: 次のバッチに備え、初期化
-        # TODO: スレッドが全部完了してから呼ばれるし、基本的にには学習のが速いから大丈夫なはず（ここに到達するほうが速いと破壊的になる。）
-        self.images_batch = []
-        self.label_batch = []
-
-        time3 = time.time()
-        print(time3 - time2)
+        time2 = time.time()
+        print(time2 - time1)
 
         for i in range(len(batches)):
             self.images_batch.append(batches[i][0])
@@ -313,7 +302,7 @@ class Train:
         print('self.label_batch.length:', len(self.label_batch))
 
     @staticmethod
-    def _load_frame_and_set_data_thread(frame: list, label: int, batches: list, thread_num: int):
+    def _load_frame_pkl_thread(frame_pkl_path: str, label: int, batches: list, thread_num: int):
         """
         _prepare_next_batch_thread メソッドの子スレッドとして動くスレッド。
         frame 内の画像を読み出し、加工まで行う。
@@ -323,17 +312,14 @@ class Train:
 
         time1 = time.time()
 
-        # インスタンスを準備
-        img2vec_converter_instance = img2vec.converter.Converter()
-        # 画像読み込み
-        images_vec = []
-        for path in frame:
-            # print(path)
-            vec = img2vec_converter_instance.main(path)
-            images_vec.append(vec)
+        with open(frame_pkl_path, 'rb') as f:
+            frame_images_vec = pkl.load(f)
+
+        print(type(frame_images_vec))
+        print(sys.getsizeof(frame_images_vec))
 
         # バッチデータに結果を追加
-        batches.append((images_vec, label))
+        batches.append((frame_images_vec, label))
         time2 = time.time()
         print('>>>>>> completed thread {}, time: {}'.format(str(thread_num), str(time2 - time1)))
 
@@ -415,7 +401,7 @@ class Train:
 if __name__ == '__main__':
     # setup
     Train.GPU_DEVICE = 0
-    Train.INPUT_IMAGE_DIR = '/converted_data/20181030_120708/'
+    Train.INPUT_IMAGE_DIR = '/image_vec_data/20181030_092846/'
     Train.OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
     # params
     # execute

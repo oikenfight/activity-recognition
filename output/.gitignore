@@ -6,3 +6,5 @@ with_trained_model/result/*
 with_trained_model/recognition/*
 3dcnn_lstm_model/models/*
 3dcnn_lstm_model/recognitions/*
+3dcnn_lstm_model/acc.png
+3dcnn_lstm_model/loss.png

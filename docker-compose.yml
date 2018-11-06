@@ -24,4 +24,5 @@ services:
       - ./:/workspace
       - ../data/:/data
       - ../converted_data:/converted_data
+      - ../image_vec_data:/image_vec_data
     working_dir: "/workspace"

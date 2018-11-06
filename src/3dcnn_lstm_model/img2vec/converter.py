@@ -8,8 +8,8 @@ class Converter:
     データの構造上 chainer の便利クラス使うとやりづらいので、あえての素の Pillow
     """
 
-    WIDTH = int(1440 / 4)
-    HEIGHT = int(1080 / 4)
+    WIDTH = 240
+    HEIGHT = 180
     CONVERT_TYPE = 'RGB'
 
     def __init__(self):
@@ -22,9 +22,9 @@ class Converter:
         """
         img = Image.open(path)
         img = self._transform(img)
-        img_data = np.array(img)
-        img_data = img_data / 255
-        return img_data.tolist()
+        pixels = list(img.getdata())
+        pixels = [pixels[i * self.WIDTH:(i + 1) * self.WIDTH] for i in range(self.HEIGHT)]
+        return pixels
 
     def _transform(self, img: Image):
         """
