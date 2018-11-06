@@ -104,12 +104,12 @@ if __name__ == '__main__':
     FileManager.BASE_DIR = '/converted_data/20180929_071816/'
     file_manager = FileManager()
 
-    # print('===== all dirs ==================')
-    # for path in file_manager.all_dir_lists():
-    #     print(path)
-
-    print()
-    print('===== all files ==================')
-    for path in file_manager.all_file_lists():
+    print('===== all dirs ==================')
+    for path in file_manager.all_dir_lists():
         print(path)
+
+    # print()
+    # print('===== all files ==================')
+    # for path in file_manager.all_file_lists():
+    #     print(path)
 
