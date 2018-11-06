@@ -55,6 +55,7 @@ RUN pip install \
     pillow \
     h5py \
     matplotlib \
+    memory_profiler \
     --no-cache-dir
 
 RUN nvidia-smi
