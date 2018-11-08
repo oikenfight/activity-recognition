@@ -45,7 +45,7 @@ class Train:
     EPOCH_NUM = 100000
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
-    BACH_SIZE = 20
+    BACH_SIZE = 160
     TEST_RATE = 0.2
     IMAGE_HEIGHT = 180
     IMAGE_WIDTH = 240
@@ -54,8 +54,8 @@ class Train:
     OVERLAP_SIZE = 4
     # 学習に使用するデータ数は KEPT_FRAME_SIZE だが、保持するデータ数は KEPT_FRAME_SIZE + THREAD_SIZE となる
     # （学習時に index からデータを拾う際に、kept_data が更新中で IndexError となる可能性を防ぐため。）
-    KEPT_FRAME_SIZE = 100
-    KEPT_TEST_FRAME_SIZE = 100
+    KEPT_FRAME_SIZE = 16000
+    KEPT_TEST_FRAME_SIZE = 4000
     THREAD_SIZE = 20
 
     def __init__(self):
@@ -251,9 +251,9 @@ class Train:
         print('>>> _update_kept_data_constantly_thread')
         while True:
             if self.training:
-                time.sleep(3)
+                time.sleep(5)
             else:
-                time.sleep(10)
+                time.sleep(20)
                 continue
 
             np.random.shuffle(self.train_indexes)
@@ -281,9 +281,9 @@ class Train:
         print('>>> _update_kept_test_data_constantly_thread')
         while True:
             if not self.training:
-                time.sleep(3)
+                time.sleep(5)
             else:
-                time.sleep(10)
+                time.sleep(20)
                 continue
 
             np.random.shuffle(self.test_indexes)
@@ -373,7 +373,7 @@ class Train:
             self._acc_plot(epoch, train_acc, test_acc)
 
             # save model
-            if epoch % 200 == 0:
+            if epoch % 200 == 0 and not epoch == 0:
                 print('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
@@ -391,7 +391,7 @@ class Train:
             self.optimizer.update()
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
-            if i % 20 == 0:
+            if i % 10 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
@@ -401,12 +401,15 @@ class Train:
         print('>>> test start')
         self.training = False
         loss, acc = [], []
+        batch_num = int(self.KEPT_TEST_FRAME_SIZE / self.BACH_SIZE)
         for i, (images_vec_batch, label_batch) in enumerate(self._random_batches_for_test()):
             # テスト実行
             self.model.cleargrads()
             _loss, _acc = self._forward(images_vec_batch, label_batch)
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
+            if i % 10 == 0:
+                print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
 
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
@@ -417,8 +420,9 @@ class Train:
         indexes をランダムな順番で、バッチサイズずつに分割したビデオ・ラベルの tuple 順次を返却する
         :return:
         """
-        indexes = np.array(range(self.KEPT_TEST_FRAME_SIZE))
+        indexes = np.array(range(self.KEPT_FRAME_SIZE))
         np.random.shuffle(indexes)
+        self._check_data_consistency(indexes)
         for i in range(0, len(indexes), self.BACH_SIZE):
             batch_indexes = indexes[i:i + self.BACH_SIZE]
             yield self.kept_images_vec[batch_indexes], self.kept_labels[batch_indexes]
@@ -431,6 +435,7 @@ class Train:
         """
         indexes = np.array(range(self.KEPT_TEST_FRAME_SIZE))
         np.random.shuffle(indexes)
+        self._check_data_consistency(indexes)
         for i in range(0, len(indexes), self.BACH_SIZE):
             batch_indexes = indexes[i:i + self.BACH_SIZE]
             yield self.kept_test_images_vec[batch_indexes], self.kept_test_labels[batch_indexes]
@@ -454,6 +459,21 @@ class Train:
                 loss = F.softmax_cross_entropy(y, t)
                 accuracy = F.accuracy(y, t)
         return loss, accuracy
+
+    def _check_data_consistency(self, all_batch_indexes):
+        acc = 0
+        error = 0
+        for frame, label in zip(self.kept_frames[all_batch_indexes], self.kept_labels[all_batch_indexes]):
+            frame_action = frame[0].decode('utf8').split('/')[3]
+            label_action = self.actions[label]
+            if frame_action == label_action:
+                acc += 1
+            else:
+                error += 1
+        print('... _check_data_consistency:  acc: %s / %s, error: %s / %s' % (acc, len(all_batch_indexes), error, len(all_batch_indexes)))
+
+
+
 
     @staticmethod
     def _loss_plot(epoch, train_loss, test_loss):

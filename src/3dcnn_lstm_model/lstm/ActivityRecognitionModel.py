@@ -4,7 +4,7 @@ import chainer.links as L
 
 
 class ActivityRecognitionModel(chainer.Chain):
-    dropout_ratio = 0.5
+    dropout_ratio = 0.4
 
     def __init__(self, out_size, lstm_hidden_size=512, train=True):
         super(ActivityRecognitionModel, self).__init__()
