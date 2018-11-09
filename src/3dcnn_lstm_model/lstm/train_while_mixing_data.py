@@ -47,15 +47,15 @@ class Train:
     HIDDEN_SIZE = 512
     BACH_SIZE = 160
     TEST_RATE = 0.2
-    IMAGE_HEIGHT = 180
-    IMAGE_WIDTH = 240
+    IMAGE_HEIGHT = 224
+    IMAGE_WIDTH = 224
     IMAGE_COLOR = 3
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
     # 学習に使用するデータ数は KEPT_FRAME_SIZE だが、保持するデータ数は KEPT_FRAME_SIZE + THREAD_SIZE となる
     # （学習時に index からデータを拾う際に、kept_data が更新中で IndexError となる可能性を防ぐため。）
-    KEPT_FRAME_SIZE = 16000
-    KEPT_TEST_FRAME_SIZE = 4000
+    KEPT_FRAME_SIZE = 1000
+    KEPT_TEST_FRAME_SIZE = 100
     THREAD_SIZE = 20
 
     def __init__(self):
@@ -175,7 +175,7 @@ class Train:
 
     def _set_model(self) -> ActivityRecognitionModel:
         self._print_title('set model:')
-        self.model = ActivityRecognitionModel(self.FEATURE_SIZE, self.HIDDEN_SIZE, len(self.actions))
+        self.model = ActivityRecognitionModel(len(self.actions), self.HIDDEN_SIZE, len(self.actions))
 
     def _set_optimizer(self) -> optimizers:
         self._print_title('set optimizer')
@@ -391,6 +391,7 @@ class Train:
             self.optimizer.update()
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
+            print('...train: ', str(i))
             if i % 10 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
         loss_ave, acc_ave = np.average(loss), np.average(acc)
