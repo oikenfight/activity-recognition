@@ -26,17 +26,11 @@ class Converter:
         img.save('./test2.jpg')
 
         x = chainer.links.model.vision.vgg.prepare(img)
-
-        # 画像保存
-        img = x.transpose((1, 2, 0))
-        img = Image.fromarray(np.uint8(img))
-        img.save('./test.jpg')
-
+        # # 画像保存
+        # img = x.transpose((1, 2, 0))
+        # img = Image.fromarray(np.uint8(img))
+        # img.save('./test.jpg')
         return x
-
-        # img = self._transform(img)
-        # pixel = self._to_bgr_pixel(img)
-        # return pixel
 
     def _transform(self, img: Image):
         """
