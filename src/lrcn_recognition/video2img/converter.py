@@ -1,28 +1,34 @@
 import os
 import sys
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from FileManager import FileManager
 
 
 class Converter:
-    FRAME_RATE = 30
+    FPS = 2
+    WIDTH = 240
+    HEIGHT = 180
 
-    def main(self, input_webm_path: str, output_dir: str):
+    def __init__(self):
+        pass
+
+    def main(self, input_path, output_dir):
         print()
-        print("<<< WebmConberter class: convert %s into %s as mp4 >>>" % (input_webm_path, output_dir))
+        print("<<< Converter class: convert %s into %s as jpg >>>" % (input_path, output_dir))
 
-        if not os.path.isfile(input_webm_path):
+        if not os.path.isfile(input_path):
             raise InputFileNotFoundError
 
         if not os.path.exists(output_dir):
             print('>>> create output directory.')
             os.makedirs(output_dir)
 
-        mp4_filename = input_webm_path.split('/')[-1].split('.')[0] + '.mp4'
-
+        size_option = '%sx%s ' % (self.WIDTH, self.HEIGHT)
         print('>>> execute ffmpeg command.')
-        convert_command = "ffmpeg -i " + input_webm_path + " -r " + str(self.FRAME_RATE) + ' ' + output_dir + mp4_filename
+        convert_command = "ffmpeg -i "+input_path+" -f image2 -vf fps="+str(self.FPS)+' -s '+size_option+output_dir+"%04d.jpg"
         print(convert_command)
         result_status = os.system(convert_command)
 
@@ -33,7 +39,7 @@ class Converter:
 
 class FfmpegExecuteError(Exception):
     def __str__(self):
-        return "入力されたファイルを mp4 に適切に変換できませんでした。"
+        return "入力されたファイルを jpg に適切に変換できませんでした。"
 
 
 class InputFileNotFoundError(Exception):
@@ -50,8 +56,9 @@ if __name__ == '__main__':
     Converter.FPS = 2
 
     # Test input file path
-    input_webm_path = '../data/original-actions/actions/test2/ID0057_test2.webm'
+    input_path = '../data/STAIR-actions/stair_action/washing_hands/a007-0477C.mp4'
     output_dir = './tmp/'
 
     converter = Converter()
-    converter.main(input_webm_path, output_dir)
+    converter.main(input_path, output_dir)
+

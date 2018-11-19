@@ -6,57 +6,47 @@ import time
 from datetime import datetime
 import os
 from glob import glob
-import sys
 import cupy
 import matplotlib
 import threading
+import random
+from FileManager import FileManager
+from LrcnActivityRecognitionModel import LrcnActivityRecognitionModel
+import img2vec
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 fig = plt.figure()
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
-from ActivityRecognitionModel import ActivityRecognitionModel
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-import img2vec
-import image_preprocessor
-
-from FileManager import FileManager
 
 
 class Train:
     """
+    LRCN を用いて、時系列画像から行動認識してみる。
     全画像データを読み込むのがメモリの問題で不可能だったため、
     一気に全画像を読み込むのではなく、可能な限り多くの画像をランダムに読み込んでおき、
-    常にランダムに保持する画像を更新しながら、エポック数を増やすことで全画像を学習できるようにする。
-    画像の更新は学習プロセスとは別に、別スレッドで更新を続ける。
-    また、これをやるのは学習のときのみで、
-    テスト時には、計算する度に画像を読み込むことにする。（実装が難しくなりすぎたので、時間かかるけど。。）
+    適当なタイミングでデータをシャッフルしてまた読み込んで学習する。
     """
 
     # Train constant
     INPUT_IMAGE_DIR = '/converted_data/{datetime}/'
-    OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
+    OUTPUT_BASE = './output/lrcn_recognition/models/'
 
     # setup
     GPU_DEVICE = 0
     EPOCH_NUM = 100000
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
-    BACH_SIZE = 160
+    BACH_SIZE = 90
     TEST_RATE = 0.2
-    IMAGE_HEIGHT = 180
-    IMAGE_WIDTH = 240
-    IMAGE_COLOR = 3
+    IMAGE_HEIGHT = 224
+    IMAGE_WIDTH = 224
+    IMAGE_CHANNEL = 3
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
-    # 学習に使用するデータ数は KEPT_FRAME_SIZE だが、保持するデータ数は KEPT_FRAME_SIZE + THREAD_SIZE となる
-    # （学習時に index からデータを拾う際に、kept_data が更新中で IndexError となる可能性を防ぐため。）
-    KEPT_FRAME_SIZE = 16000
+    KEPT_FRAME_SIZE = 17000
     KEPT_TEST_FRAME_SIZE = 4000
-    THREAD_SIZE = 20
+    THREAD_SIZE = 50
+    TRAIN_RATE = 0.02
 
     def __init__(self):
         self.xp = np
@@ -78,29 +68,22 @@ class Train:
         self.kept_indexes = np.empty(self.KEPT_FRAME_SIZE, dtype=np.int32)   # 現在学習に用いているなデータの index を格納
         self.kept_frames = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE), dtype='S96')  # 現在学習に用いている各フレームの時系列画像のパスデータ(str array)を格納
         self.kept_labels = np.empty(self.KEPT_FRAME_SIZE, dtype=np.int8)    # kept_frames に順対応した正解ラベルを格納
-        self.kept_images_vec = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_COLOR), dtype=np.float32)  # kept_frames に順対応したベクトルデータを格納
+        self.kept_images_vec = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_CHANNEL, self.IMAGE_HEIGHT, self.IMAGE_WIDTH), dtype=np.float32)  # kept_frames に順対応したベクトルデータを格納
 
         # 学習と同様にテストデータも保持する
         self.kept_test_indexes = np.empty(self.KEPT_TEST_FRAME_SIZE, dtype=np.int32)
         self.kept_test_frames = np.empty((self.KEPT_TEST_FRAME_SIZE, self.FRAME_SIZE), dtype='S96')
         self.kept_test_labels = np.empty(self.KEPT_TEST_FRAME_SIZE, dtype=np.int8)
-        self.kept_test_images_vec = np.empty((self.KEPT_TEST_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_COLOR), dtype=np.float32)
+        self.kept_test_images_vec = np.empty((self.KEPT_TEST_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_CHANNEL, self.IMAGE_HEIGHT, self.IMAGE_WIDTH), dtype=np.float32)
 
     def _prepare(self):
         self._load_frames_and_labels()
         self._shuffle_data()
-        self._set_model()
-        self._set_optimizer()
+        self._set_model_and_optimizer()
         self._make_save_dir()
         self._dump_actions_data()
         self._to_gpu()
-        self._set_init_kept_data()
-        self._set_init_kept_test_data()
-        # スレッドでランダムに常時データを更新する
-        thread_train = threading.Thread(target=self._update_kept_data_constantly_thread)
-        thread_test = threading.Thread(target=self._update_kept_test_data_constantly_thread)
-        thread_train.start()
-        thread_test.start()
+        self._init_kept_data()
 
     def _to_gpu(self):
         if self.GPU_DEVICE >= 0:
@@ -173,14 +156,18 @@ class Train:
         self.train_indexes = indexes[test_num:]
         self.test_indexes = indexes[:test_num]
 
-    def _set_model(self) -> ActivityRecognitionModel:
+    def _set_model_and_optimizer(self) -> LrcnActivityRecognitionModel:
         self._print_title('set model:')
-        self.model = ActivityRecognitionModel(self.FEATURE_SIZE, self.HIDDEN_SIZE, len(self.actions))
-
-    def _set_optimizer(self) -> optimizers:
-        self._print_title('set optimizer')
-        optimizer = optimizers.Adam()
+        self.model = LrcnActivityRecognitionModel(len(self.actions))
+        optimizer = chainer.optimizers.MomentumSGD()
         self.optimizer = optimizer.setup(self.model)
+
+        # 学習済みレイヤの学習率を抑制
+        for func_name in self.model.base._children:
+            for param in self.model.base[func_name].params():
+                param.update_rule.hyperparam.lr *= self.TRAIN_RATE
+        # # 学習済みレイヤを完全に固定
+        # self.model.base.disable_update()
 
     def _make_save_dir(self):
         save_dir = self.OUTPUT_BASE + datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -194,7 +181,23 @@ class Train:
         with open(path, 'wb') as f:
             pkl.dump(self.actions, f, pkl.HIGHEST_PROTOCOL)
 
-    def _set_init_kept_data(self):
+    def _init_kept_data(self):
+        # 学習に使用するデータを常にランダムに更新しながら保持（全データはメモリの都合上読み込めないため。）
+        # indexes, frames, labels, images_vec は順同一
+        self.kept_indexes = np.empty(self.KEPT_FRAME_SIZE, dtype=np.int32)   # 現在学習に用いているなデータの index を格納
+        self.kept_frames = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE), dtype='S96')  # 現在学習に用いている各フレームの時系列画像のパスデータ(str array)を格納
+        self.kept_labels = np.empty(self.KEPT_FRAME_SIZE, dtype=np.int8)    # kept_frames に順対応した正解ラベルを格納
+        self.kept_images_vec = np.empty((self.KEPT_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_CHANNEL, self.IMAGE_HEIGHT, self.IMAGE_WIDTH), dtype=np.float32)  # kept_frames に順対応したベクトルデータを格納
+
+        # 学習と同様にテストデータも保持する
+        self.kept_test_indexes = np.empty(self.KEPT_TEST_FRAME_SIZE, dtype=np.int32)
+        self.kept_test_frames = np.empty((self.KEPT_TEST_FRAME_SIZE, self.FRAME_SIZE), dtype='S96')
+        self.kept_test_labels = np.empty(self.KEPT_TEST_FRAME_SIZE, dtype=np.int8)
+        self.kept_test_images_vec = np.empty((self.KEPT_TEST_FRAME_SIZE, self.FRAME_SIZE, self.IMAGE_CHANNEL, self.IMAGE_HEIGHT, self.IMAGE_WIDTH), dtype=np.float32)
+        self._set_kept_data()
+        self._set_kept_test_data()
+
+    def _set_kept_data(self):
         """
         学習のために保持する画像の初期データを読み込む。
         :return:
@@ -204,7 +207,7 @@ class Train:
         init_kept_indexes = self.train_indexes[:self.KEPT_FRAME_SIZE]
 
         current_index = 0
-        for i in range(0, self.KEPT_FRAME_SIZE + self.THREAD_SIZE, self.THREAD_SIZE):
+        for i in range(0, self.KEPT_FRAME_SIZE, self.THREAD_SIZE):
             target_indexes = init_kept_indexes[i:i+self.THREAD_SIZE]
             # images_data: list of tuple (target_index, [frame], [images_vec], label)
             images_data = self._load_images_from_frame_indexes(target_indexes)
@@ -218,7 +221,7 @@ class Train:
             print('init kept data:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_FRAME_SIZE))
         print('>>>>>>> all child threads are completed.')
 
-    def _set_init_kept_test_data(self):
+    def _set_kept_test_data(self):
         """
         テストのために保持する画像の初期データを読み込む。
         （メソッド被るけど、一回しか呼ばんし面倒いので。）
@@ -229,7 +232,7 @@ class Train:
         init_kept_test_indexes = self.test_indexes[:self.KEPT_TEST_FRAME_SIZE]
 
         current_index = 0
-        for i in range(0, self.KEPT_TEST_FRAME_SIZE + self.THREAD_SIZE, self.THREAD_SIZE):
+        for i in range(0, self.KEPT_TEST_FRAME_SIZE, self.THREAD_SIZE):
             target_indexes = init_kept_test_indexes[i:i+self.THREAD_SIZE]
             # images_data: list of tuple (target_index, [frame], [images_vec], label)
             images_data = self._load_images_from_frame_indexes(target_indexes)
@@ -240,68 +243,8 @@ class Train:
                 self.kept_test_images_vec[current_index] = np.array(images_data[j][2], dtype=np.float32)
                 self.kept_test_labels[current_index] = images_data[j][3]
                 current_index += 1
-            print('init kept test data:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_FRAME_SIZE))
+            print('init kept test data:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_TEST_FRAME_SIZE))
         print('>>>>>>> all child threads are completed.')
-
-    def _update_kept_data_constantly_thread(self):
-        """
-        常に動き続けるスレッドで、学習データをランダムに更新する。
-        :return:
-        """
-        print('>>> _update_kept_data_constantly_thread')
-        while True:
-            if self.training:
-                time.sleep(5)
-            else:
-                time.sleep(20)
-                continue
-
-            np.random.shuffle(self.train_indexes)
-            added_target_indexes = self.train_indexes[:self.THREAD_SIZE]
-            # images_data: list of tuple (target_index, [frame], [images_vec], label)
-            images_data = self._load_images_from_frame_indexes(added_target_indexes)
-
-            # 削除するデータを決定・取得
-            random_indexes = np.array(range(self.KEPT_FRAME_SIZE))
-            np.random.shuffle(random_indexes)
-            removed_target_indexes = random_indexes[:self.THREAD_SIZE]
-
-            for i in range(len(removed_target_indexes)):
-                self.kept_images_vec[removed_target_indexes[i]] = np.array(images_data[i][2], dtype=np.float32)
-                self.kept_indexes[removed_target_indexes[i]] = images_data[i][0]
-                self.kept_frames[removed_target_indexes[i]] = np.array(images_data[i][1], dtype=str)
-                self.kept_labels[removed_target_indexes[i]] = images_data[i][3]
-            print('... updated kept data')
-
-    def _update_kept_test_data_constantly_thread(self):
-        """
-        常に動き続けるスレッドで、学習データをランダムに更新する。
-        :return:
-        """
-        print('>>> _update_kept_test_data_constantly_thread')
-        while True:
-            if not self.training:
-                time.sleep(5)
-            else:
-                time.sleep(20)
-                continue
-
-            np.random.shuffle(self.test_indexes)
-            added_target_indexes = self.test_indexes[:self.THREAD_SIZE]
-            # images_data: list of tuple (target_index, [frame], [images_vec], label)
-            images_data = self._load_images_from_frame_indexes(added_target_indexes)
-
-            # 削除するデータを決定・取得
-            random_indexes = np.array(range(self.KEPT_TEST_FRAME_SIZE))
-            np.random.shuffle(random_indexes)
-            removed_target_indexes = random_indexes[:self.THREAD_SIZE]
-
-            for i in range(len(removed_target_indexes)):
-                self.kept_test_images_vec[removed_target_indexes[i]] = np.array(images_data[i][2], dtype=np.float32)
-                self.kept_test_indexes[removed_target_indexes[i]] = images_data[i][0]
-                self.kept_test_frames[removed_target_indexes[i]] = np.array(images_data[i][1], dtype=str)
-                self.kept_test_labels[removed_target_indexes[i]] = images_data[i][3]
-            print('... updated kept test data')
 
     def _load_images_from_frame_indexes(self, target_indexes) -> list:
         """
@@ -372,8 +315,11 @@ class Train:
             self._loss_plot(epoch, train_loss, test_loss)
             self._acc_plot(epoch, train_acc, test_acc)
 
+            if epoch % 10 == 0 and not epoch == 0:
+                self._init_kept_data()
+
             # save model
-            if epoch % 200 == 0 and not epoch == 0:
+            if epoch % 100 == 0 and not epoch == 0:
                 print('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
@@ -385,13 +331,13 @@ class Train:
         batch_num = int(self.KEPT_FRAME_SIZE / self.BACH_SIZE)
         for i, (images_vec_batch, label_batch) in enumerate(self._random_batches_for_train()):
             # 学習実行
-            self.model.cleargrads()
+            self.model.lstm_reset_state()
             _loss, _acc = self._forward(images_vec_batch, label_batch)
             _loss.backward()
             self.optimizer.update()
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
-            if i % 10 == 0:
+            if i % 5 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
@@ -404,16 +350,58 @@ class Train:
         batch_num = int(self.KEPT_TEST_FRAME_SIZE / self.BACH_SIZE)
         for i, (images_vec_batch, label_batch) in enumerate(self._random_batches_for_test()):
             # テスト実行
+            self.model.lstm_reset_state()
             self.model.cleargrads()
             _loss, _acc = self._forward(images_vec_batch, label_batch)
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
-            if i % 10 == 0:
+            if i % 50 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
 
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
         return loss_ave, acc_ave
+
+    # def _train(self):
+    #     print('>>> train start')
+    #     self.training = True
+    #     loss, acc = [], []
+    #     batch_num = int(self.KEPT_FRAME_SIZE / self.BACH_SIZE)
+    #     for i, (images_vec_batch, label_batch) in enumerate(self._random_batches_for_train()):
+    #         # 学習実行
+    #         self.model.lstm_reset_state()
+    #         for j in range(self.FRAME_SIZE):
+    #             self.model.cleargrads()
+    #             _loss, _acc = self._forward(images_vec_batch[:, j], label_batch)
+    #             _loss.backward()
+    #             self.optimizer.update()
+    #             loss.append(_loss.data.tolist())
+    #             acc.append(_acc.data.tolist())
+    #         if i % 5 == 0:
+    #             print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
+    #     loss_ave, acc_ave = np.average(loss), np.average(acc)
+    #     print('======= This epoch train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+    #     return loss_ave, acc_ave
+    #
+    # def _test(self):
+    #     print('>>> test start')
+    #     self.training = False
+    #     loss, acc = [], []
+    #     batch_num = int(self.KEPT_TEST_FRAME_SIZE / self.BACH_SIZE)
+    #     for i, (images_vec_batch, label_batch) in enumerate(self._random_batches_for_test()):
+    #         # テスト実行
+    #         self.model.lstm_reset_state()
+    #         for j in range(self.FRAME_SIZE):
+    #             self.model.cleargrads()
+    #             _loss, _acc = self._forward(images_vec_batch[:, j], label_batch)
+    #             loss.append(_loss.data.tolist())
+    #             acc.append(_acc.data.tolist())
+    #         if i % 50 == 0:
+    #             print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
+    #
+    #     loss_ave, acc_ave = np.average(loss), np.average(acc)
+    #     print('======= This epoch test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+    #     return loss_ave, acc_ave
 
     def _random_batches_for_train(self) -> list:
         """
@@ -440,25 +428,51 @@ class Train:
             batch_indexes = indexes[i:i + self.BACH_SIZE]
             yield self.kept_test_images_vec[batch_indexes], self.kept_test_labels[batch_indexes]
 
-    def _forward(self, images_vec_batch: cupy.ndarray, label_batch: np.ndarray, train=True):
+    def _forward(self, images_vec_batch: np.ndarray, label_batch: np.ndarray, train=True):
         """
         順方向計算実行。
-        :param cupy.ndarray images_vec_batch:
+        :param np.ndarray images_vec_batch:
         :param np.ndarray label_batch:
         :param bool train:
         :return:
         """
-        # 0軸 と 1軸を入れ替えて転置
-        x = self.xp.array(images_vec_batch).astype(np.float32).transpose((1, 0, 2, 3, 4))
-        t = self.xp.array(label_batch).astype(np.int32)
+        loss = 0
+        acc = 0
+        self.model.lstm_reset_state()
+        for i in range(self.FRAME_SIZE):
+            x = self.xp.array(images_vec_batch[:, i]).astype(np.float32)
+            t = self.xp.array(label_batch).astype(np.int32)
+            self.model.cleargrads()
 
-        # gpu を使っていれば、cupy に変換される
-        with chainer.using_config('train', train):
-            with chainer.using_config('enable_backprop', train):
-                y = self.model(x)
-                loss = F.softmax_cross_entropy(y, t)
-                accuracy = F.accuracy(y, t)
-        return loss, accuracy
+            with chainer.using_config('train', train):
+                with chainer.using_config('enable_backprop', train):
+                    y = self.model(x)
+                    loss += F.softmax_cross_entropy(y, t)
+                    acc += F.accuracy(y, t)
+        return loss / float(self.FRAME_SIZE), acc / float(self.FRAME_SIZE)
+
+    # def _forward(self, image_vec_batch: cupy.ndarray, label_batch: np.ndarray, train=True):
+    #     """
+    #     順方向計算実行。
+    #     :param cupy.ndarray image_vec_batch:
+    #     :param np.ndarray label_batch:
+    #     :param bool train:
+    #     :return:
+    #     """
+    #     # 常に固定のバッチサイズで来るとは限らない（バッチの端数部分）
+    #     batch_size = len(image_vec_batch)
+    #     # VGG の入力 (batch_size, chennels, height, width) = (batch_size, 3, 224, 224) に合わせる
+    #     # x = self.xp.array(image_vec_batch).astype(np.float32).reshape(batch_size, self.IMAGE_CHANNEL, self.IMAGE_HEIGHT, self.IMAGE_WIDTH)
+    #     # x = _x.transpose((0, 3, 1, 2))
+    #     x = self.xp.array(image_vec_batch).astype(np.float32)
+    #     t = self.xp.array(label_batch).astype(np.int32)
+    #
+    #     with chainer.using_config('train', train):
+    #         with chainer.using_config('enable_backprop', train):
+    #             y = self.model(x)
+    #             loss = F.softmax_cross_entropy(y, t)
+    #             accuracy = F.accuracy(y, t)
+    #     return loss, accuracy
 
     def _check_data_consistency(self, all_batch_indexes):
         acc = 0
@@ -472,9 +486,6 @@ class Train:
                 error += 1
         print('... _check_data_consistency:  acc: %s / %s, error: %s / %s' % (acc, len(all_batch_indexes), error, len(all_batch_indexes)))
 
-
-
-
     @staticmethod
     def _loss_plot(epoch, train_loss, test_loss):
         plt.cla()
@@ -482,7 +493,7 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_loss))
         plt.xlabel('epochs')
         plt.ylabel('loss')
-        plt.savefig('./output/3dcnn_lstm_model/loss.png')
+        plt.savefig('./output/lrcn_recognition/loss.png')
 
     @staticmethod
     def _acc_plot(epoch, train_acc, test_acc):
@@ -491,7 +502,7 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_acc))
         plt.xlabel('epochs')
         plt.ylabel('acc')
-        plt.savefig('./output/3dcnn_lstm_model/acc.png')
+        plt.savefig('./output/lrcn_recognition/acc.png')
 
     @staticmethod
     def _print_title(s: str):
@@ -508,7 +519,7 @@ if __name__ == '__main__':
     # setup
     Train.GPU_DEVICE = 0
     Train.INPUT_IMAGE_DIR = '/converted_data/20181106_043229/'
-    Train.OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
+    Train.OUTPUT_BASE = './output/lrcn_recognition/models/'
     # params
     # execute
     train = Train()
