@@ -9,12 +9,9 @@ src/with_trained_model/loss.png
 src/cnn_recognition/acc.png
 src/cnn_recognition/loss.png
 src/cnn_recognition/__pycache__/
-src/2dcnn_recognition/acc.png
-src/2dcnn_recognition/loss.png
-src/2dcnn_recognition/__pycache__/
-src/3dcnn_recognition/acc.png
-src/3dcnn_recognition/loss.png
-src/3dcnn_recognition/__pycache__/
+src/lrcn_recognition/acc.png
+src/lrcn_recognition/loss.png
+src/lrcn_recognition/__pycache__/
 src/VGG_ILSVRC_19_layers.caffemodel
 src/VGG_ILSVRC_19_layers.npz
 src/VGG_ILSVRC_16_layers.caffemodel

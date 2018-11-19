@@ -8,3 +8,9 @@ with_trained_model/recognition/*
 3dcnn_lstm_model/recognitions/*
 3dcnn_lstm_model/acc.png
 3dcnn_lstm_model/loss.png
+cnn_recognition/loss.png
+cnn_recognition/acc.png
+cnn_recognition/models/*
+lrcn_recognition/loss.png
+lrcn_recognition/acc.png
+lrcn_recognition/models/*
