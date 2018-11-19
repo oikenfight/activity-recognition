@@ -21,23 +21,19 @@ fig = plt.figure()
 
 class Train:
     """
+    CNN だけを用いて切り出された画像から行動認識する。
     全画像データを読み込むのがメモリの問題で不可能だったため、
     一気に全画像を読み込むのではなく、可能な限り多くの画像をランダムに読み込んでおき、
-    常にランダムに保持する画像を更新しながら、エポック数を増やすことで全画像を学習できるようにする。
-    画像の更新は学習プロセスとは別に、別スレッドで更新を続ける。
-    また、これをやるのは学習のときのみで、
-    テスト時には、計算する度に画像を読み込むことにする。（実装が難しくなりすぎたので、時間かかるけど。。）
+    適当なタイミングでデータをシャッフルしてまた読み込んで学習する。
     """
 
     # Train constant
     INPUT_IMAGE_DIR = '/converted_data/{datetime}/'
-    OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
+    OUTPUT_BASE = './output/cnn_recognition/models/'
 
     # setup
     GPU_DEVICE = 0
-    EPOCH_NUM = 100000
-    FEATURE_SIZE = 4096
-    HIDDEN_SIZE = 512
+    EPOCH_NUM = 10000
     BACH_SIZE = 50
     TEST_RATE = 0.2
     IMAGE_HEIGHT = 224
@@ -45,10 +41,8 @@ class Train:
     IMAGE_CHANNEL = 3
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
-    # 学習に使用するデータ数は KEPT_FRAME_SIZE だが、保持するデータ数は KEPT_FRAME_SIZE + THREAD_SIZE となる
-    # （学習時に index からデータを拾う際に、kept_data が更新中で IndexError となる可能性を防ぐため。）
     KEPT_FRAME_SIZE = 17000
-    KEPT_TEST_FRAME_SIZE = 5000
+    KEPT_TEST_FRAME_SIZE = 4000
     THREAD_SIZE = 50
 
     def __init__(self):
@@ -315,11 +309,11 @@ class Train:
             self._loss_plot(epoch, train_loss, test_loss)
             self._acc_plot(epoch, train_acc, test_acc)
 
-            if epoch % 10 == 0 and not epoch == 0:
+            if epoch % 5 == 0 and not epoch == 0:
                 self._init_kept_data()
 
             # save model
-            if epoch % 200 == 0 and not epoch == 0:
+            if epoch % 50 == 0 and not epoch == 0:
                 print('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
@@ -399,8 +393,9 @@ class Train:
         # 常に固定のバッチサイズで来るとは限らない（最後のバッチとか）
         batch_size = len(image_vec_batch)
         # VGG の入力 (batch_size, chennels, height, width) = (batch_size, 3, 224, 224) に合わせる
-        _x = self.xp.array(image_vec_batch).astype(np.float32).reshape(batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNEL)
-        x = _x.transpose((0, 3, 1, 2))
+        # _x = self.xp.array(image_vec_batch).astype(np.float32).reshape(batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNEL)
+        # x = _x.transpose((0, 3, 1, 2))
+        x = self.xp.array(image_vec_batch).astype(np.float32)
         t = self.xp.array(label_batch).astype(np.int32)
 
         # gpu を使っていれば、cupy に変換される
@@ -430,7 +425,7 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_loss))
         plt.xlabel('epochs')
         plt.ylabel('loss')
-        plt.savefig('./output/3dcnn_lstm_model/loss.png')
+        plt.savefig('./output/cnn_recognition/loss.png')
 
     @staticmethod
     def _acc_plot(epoch, train_acc, test_acc):
@@ -439,7 +434,7 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_acc))
         plt.xlabel('epochs')
         plt.ylabel('acc')
-        plt.savefig('./output/3dcnn_lstm_model/acc.png')
+        plt.savefig('./output/cnn_recognition/acc.png')
 
     @staticmethod
     def _print_title(s: str):
@@ -456,7 +451,7 @@ if __name__ == '__main__':
     # setup
     Train.GPU_DEVICE = 0
     Train.INPUT_IMAGE_DIR = '/converted_data/20181106_043229/'
-    Train.OUTPUT_BASE = './output/3dcnn_lstm_model/models/'
+    Train.OUTPUT_BASE = './output/cnn_recognition/models/'
     # params
     # execute
     train = Train()
