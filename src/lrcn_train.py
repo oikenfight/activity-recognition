@@ -2,16 +2,14 @@ import numpy as np
 import pickle as pkl
 import chainer
 from chainer import cuda, datasets, iterators, optimizers, serializers, functions as F
-import time
 from datetime import datetime
 import os
 from glob import glob
 import cupy
 import matplotlib
 import threading
-import random
 from FileManager import FileManager
-from CnnActivityRecognitionModel import CnnActivityRecognitionModel
+from lrcn_recognition.LrcnActivityRecognitionModel import LrcnActivityRecognitionModel
 import img2vec
 
 matplotlib.use('Agg')
@@ -21,7 +19,7 @@ fig = plt.figure()
 
 class Train:
     """
-    CNN だけを用いて切り出された画像から行動認識する。
+    LRCN を用いて、時系列画像から行動認識してみる。
     全画像データを読み込むのがメモリの問題で不可能だったため、
     一気に全画像を読み込むのではなく、可能な限り多くの画像をランダムに読み込んでおき、
     適当なタイミングでデータをシャッフルしてまた読み込んで学習する。
@@ -29,12 +27,14 @@ class Train:
 
     # Train constant
     INPUT_IMAGE_DIR = '/converted_data/{datetime}/'
-    OUTPUT_BASE = './output/cnn_recognition/models/'
+    OUTPUT_BASE = './output/lrcn_recognition/models/'
 
     # setup
     GPU_DEVICE = 0
-    EPOCH_NUM = 10000
-    BACH_SIZE = 50
+    EPOCH_NUM = 100000
+    FEATURE_SIZE = 4096
+    HIDDEN_SIZE = 512
+    BACH_SIZE = 90
     TEST_RATE = 0.2
     IMAGE_HEIGHT = 224
     IMAGE_WIDTH = 224
@@ -44,6 +44,7 @@ class Train:
     KEPT_FRAME_SIZE = 17000
     KEPT_TEST_FRAME_SIZE = 4000
     THREAD_SIZE = 50
+    TRAIN_RATE = 0.02
 
     def __init__(self):
         self.xp = np
@@ -153,15 +154,18 @@ class Train:
         self.train_indexes = indexes[test_num:]
         self.test_indexes = indexes[:test_num]
 
-    def _set_model_and_optimizer(self) -> CnnActivityRecognitionModel:
+    def _set_model_and_optimizer(self) -> LrcnActivityRecognitionModel:
         self._print_title('set model:')
-        self.model = CnnActivityRecognitionModel(len(self.actions))
+        self.model = LrcnActivityRecognitionModel(len(self.actions))
         optimizer = chainer.optimizers.MomentumSGD()
         self.optimizer = optimizer.setup(self.model)
+
         # 学習済みレイヤの学習率を抑制
         for func_name in self.model.base._children:
             for param in self.model.base[func_name].params():
-                param.update_rule.hyperparam.lr *= 0.1
+                param.update_rule.hyperparam.lr *= self.TRAIN_RATE
+        # # 学習済みレイヤを完全に固定
+        # self.model.base.disable_update()
 
     def _make_save_dir(self):
         save_dir = self.OUTPUT_BASE + datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -309,11 +313,11 @@ class Train:
             self._loss_plot(epoch, train_loss, test_loss)
             self._acc_plot(epoch, train_acc, test_acc)
 
-            if epoch % 5 == 0 and not epoch == 0:
+            if epoch % 10 == 0 and not epoch == 0:
                 self._init_kept_data()
 
             # save model
-            if epoch % 50 == 0 and not epoch == 0:
+            if epoch % 100 == 0 and not epoch == 0:
                 print('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
@@ -324,15 +328,14 @@ class Train:
         loss, acc = [], []
         batch_num = int(self.KEPT_FRAME_SIZE / self.BACH_SIZE)
         for i, (images_vec_batch, label_batch) in enumerate(self._random_batches_for_train()):
-            random_index = random.randint(0, 7)
             # 学習実行
-            self.model.cleargrads()
-            _loss, _acc = self._forward(images_vec_batch[:, random_index], label_batch)
+            self.model.lstm_reset_state()
+            _loss, _acc = self._forward(images_vec_batch, label_batch)
             _loss.backward()
             self.optimizer.update()
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
-            if i % 50 == 0:
+            if i % 5 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
@@ -344,10 +347,10 @@ class Train:
         loss, acc = [], []
         batch_num = int(self.KEPT_TEST_FRAME_SIZE / self.BACH_SIZE)
         for i, (images_vec_batch, label_batch) in enumerate(self._random_batches_for_test()):
-            random_index = random.randint(0, 7)
             # テスト実行
+            self.model.lstm_reset_state()
             self.model.cleargrads()
-            _loss, _acc = self._forward(images_vec_batch[:, random_index], label_batch)
+            _loss, _acc = self._forward(images_vec_batch, label_batch)
             loss.append(_loss.data.tolist())
             acc.append(_acc.data.tolist())
             if i % 50 == 0:
@@ -382,29 +385,28 @@ class Train:
             batch_indexes = indexes[i:i + self.BACH_SIZE]
             yield self.kept_test_images_vec[batch_indexes], self.kept_test_labels[batch_indexes]
 
-    def _forward(self, image_vec_batch: cupy.ndarray, label_batch: np.ndarray, train=True):
+    def _forward(self, images_vec_batch: np.ndarray, label_batch: np.ndarray, train=True):
         """
         順方向計算実行。
-        :param cupy.ndarray image_vec_batch:
+        :param np.ndarray images_vec_batch:
         :param np.ndarray label_batch:
         :param bool train:
         :return:
         """
-        # 常に固定のバッチサイズで来るとは限らない（最後のバッチとか）
-        batch_size = len(image_vec_batch)
-        # VGG の入力 (batch_size, chennels, height, width) = (batch_size, 3, 224, 224) に合わせる
-        # _x = self.xp.array(image_vec_batch).astype(np.float32).reshape(batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNEL)
-        # x = _x.transpose((0, 3, 1, 2))
-        x = self.xp.array(image_vec_batch).astype(np.float32)
-        t = self.xp.array(label_batch).astype(np.int32)
+        loss = 0
+        acc = 0
+        self.model.lstm_reset_state()
+        for i in range(self.FRAME_SIZE):
+            x = self.xp.array(images_vec_batch[:, i]).astype(np.float32)
+            t = self.xp.array(label_batch).astype(np.int32)
+            self.model.cleargrads()
 
-        # gpu を使っていれば、cupy に変換される
-        with chainer.using_config('train', train):
-            with chainer.using_config('enable_backprop', train):
-                y = self.model(x)
-                loss = F.softmax_cross_entropy(y, t)
-                accuracy = F.accuracy(y, t)
-        return loss, accuracy
+            with chainer.using_config('train', train):
+                with chainer.using_config('enable_backprop', train):
+                    y = self.model(x)
+                    loss += F.softmax_cross_entropy(y, t)
+                    acc += F.accuracy(y, t)
+        return loss / float(self.FRAME_SIZE), acc / float(self.FRAME_SIZE)
 
     def _check_data_consistency(self, all_batch_indexes):
         acc = 0
@@ -425,7 +427,7 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_loss))
         plt.xlabel('epochs')
         plt.ylabel('loss')
-        plt.savefig('./output/cnn_recognition/loss.png')
+        plt.savefig('./output/lrcn_recognition/loss.png')
 
     @staticmethod
     def _acc_plot(epoch, train_acc, test_acc):
@@ -434,7 +436,7 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_acc))
         plt.xlabel('epochs')
         plt.ylabel('acc')
-        plt.savefig('./output/cnn_recognition/acc.png')
+        plt.savefig('./output/lrcn_recognition/acc.png')
 
     @staticmethod
     def _print_title(s: str):
@@ -451,7 +453,7 @@ if __name__ == '__main__':
     # setup
     Train.GPU_DEVICE = 0
     Train.INPUT_IMAGE_DIR = '/converted_data/20181106_043229/'
-    Train.OUTPUT_BASE = './output/cnn_recognition/models/'
+    Train.OUTPUT_BASE = './output/lrcn_recognition/models/'
     # params
     # execute
     train = Train()

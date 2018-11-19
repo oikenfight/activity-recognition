@@ -1,5 +1,6 @@
 import numpy as np
 from PIL import Image
+import chainer
 
 
 class Converter:
@@ -22,9 +23,15 @@ class Converter:
         :return list: list of (self.HEIGHT, self.WIDTH, [b, g, r])
         """
         img = Image.open(path)
-        img = self._transform(img)
-        pixel = self._to_bgr_pixel(img)
-        return pixel
+
+        # img.save('./test2.jpg')
+
+        x = chainer.links.model.vision.vgg.prepare(img)
+        # # 画像保存
+        # img = x.transpose((1, 2, 0))
+        # img = Image.fromarray(np.uint8(img))
+        # img.save('./test.jpg')
+        return x
 
     def _transform(self, img: Image):
         """
@@ -48,9 +55,9 @@ class Converter:
             for x in range(self.WIDTH):
                 r, g, b = img.getpixel((x, y))
 
-                r -= 123.68
-                g -= 116.779
-                b -= 116.779
+                r = (r - 123.68) / 255.0
+                g = (g - 116.779) / 255.0
+                b = (b - 103.939) / 255.0
 
                 # TODO: VGG で読むには BGR の順になってないといけない。VGG 使うなら最初から openCV で読もうな。
                 row.append([b, g, r])
