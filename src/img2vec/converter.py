@@ -23,7 +23,8 @@ class Converter:
         :return list: list of (self.HEIGHT, self.WIDTH, [b, g, r])
         """
         img = Image.open(path)
-        img.save('./test2.jpg')
+
+        # img.save('./test2.jpg')
 
         x = chainer.links.model.vision.vgg.prepare(img)
         # # 画像保存
