@@ -56,7 +56,7 @@ if __name__ == '__main__':
     Converter.FPS = 2
 
     # Test input file path
-    input_path = '../data/STAIR-actions/stair_action/brushing_teeth/a017-0116C.mp4'
+    input_path = '../data/STAIR-actions/stair_action/washing_hands/a007-0477C.mp4'
     output_dir = './tmp/'
 
     converter = Converter()
