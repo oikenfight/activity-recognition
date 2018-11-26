@@ -9,8 +9,8 @@ from FileManager import FileManager
 
 class Converter:
     FPS = 2
-    WIDTH = 240
-    HEIGHT = 180
+    WIDTH = 360
+    HEIGHT = 270
 
     def __init__(self):
         pass
