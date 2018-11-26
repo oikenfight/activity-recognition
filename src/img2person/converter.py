@@ -17,6 +17,8 @@ class Converter:
     YOLO v3 を使って時系列画像に変換されたデータから人物検出を行う。
     人物検出後、その部分のみを切り出してリサイズして画像を保存する。
     """
+    DEFAULT_WIDTH = 300
+    DEFAULT_HEIGHT = 225
     WIDTH = 224
     HEIGHT = 224
     CONVERT_TYPE = 'RGB'
@@ -49,7 +51,7 @@ class Converter:
         :return:
         """
         pilimg = Image.open(input_path).convert(self.CONVERT_TYPE)
-        # pilimg.save('test_original.jpg')
+        pilimg.save('test_original.jpg')
 
         # 人物の座標（左上 x, y）(右下 x, y) を取得
         img = self._convert_pilimg_for_chainercv(pilimg)
@@ -58,11 +60,11 @@ class Converter:
 
         # 画像をトリミング
         crop_img = self._crop_img(pilimg, person_range)
-        # crop_img.save('./test_crop.jpg')
+        crop_img.save('./test_crop.jpg')
 
         # アスペクト比を維持したまま、余白を追加し正方形にする
         pasted_img = self._paste_background(crop_img)
-        # pasted_img.save('./test_pasted_img.jpg')
+        pasted_img.save('./test_pasted_img.jpg')
 
         # 画像をリサイズ
         resized_image = self._resize_img(pasted_img)
@@ -93,6 +95,13 @@ class Converter:
         # 検出精度が曖昧な場合は除去
         if score[person_index] < 0.75:
             raise Exception('人物の検出結果が曖昧です。')
+
+        # yolo が検出したやつより、少しだけ大きめに切り出す
+        bbox[person_index][:2] -= 15
+        bbox[person_index][2:] += 15
+        bbox[person_index][bbox[person_index] < 0] = 0
+        bbox[person_index][3] = bbox[person_index][3] if bbox[person_index][3] < self.DEFAULT_WIDTH else self.DEFAULT_WIDTH
+        bbox[person_index][2] = bbox[person_index][2] if bbox[person_index][2] < self.DEFAULT_HEIGHT else self.DEFAULT_HEIGHT
 
         # 左上 x, y, 右下 x, y
         return bbox[person_index][1], bbox[person_index][0], bbox[person_index][3], bbox[person_index][2]
