@@ -3,6 +3,7 @@
 /.idea
 src/__pycache__
 src/cnn_recognition/__pycache__
+src/img2person/__pycache__
 src/img2vec/__pycache__
 src/lrcn_recognition/__pycache__
 src/video2img/__pycache__

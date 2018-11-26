@@ -23,52 +23,35 @@ class Converter:
         :return list: list of (self.HEIGHT, self.WIDTH, [b, g, r])
         """
         img = Image.open(path)
-
-        # img.save('./test2.jpg')
-
+        img = self._paste_background(img)
+        # see https://github.com/chainer/chainer/blob/v5.0.0/chainer/links/model/vision/vgg.py#L466
         x = chainer.links.model.vision.vgg.prepare(img)
+
         # # 画像保存
         # img = x.transpose((1, 2, 0))
         # img = Image.fromarray(np.uint8(img))
         # img.save('./test.jpg')
         return x
 
-    def _transform(self, img: Image):
+    @staticmethod
+    def _paste_background(img: Image):
         """
-        前処理色々やる。
-        :param img:
-        :return img:
-        """
-        img = img.convert(self.CONVERT_TYPE)
-        # 画像は self.WIDTH * self.HEIGHT で必ず来るはず。。一応
-        img = img.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
-        return img
-
-    def _to_bgr_pixel(self, img: Image):
-        """
+        画像のアスペクト比を変更しないよう、黒で余白を追加して正方形に変換
         :param Image img:
-        :return list bgr_pixels:
+        :return:
         """
-        bgr_pixels = []
-        for y in range(self.HEIGHT):
-            row = []
-            for x in range(self.WIDTH):
-                r, g, b = img.getpixel((x, y))
-
-                r = (r - 123.68) / 255.0
-                g = (g - 116.779) / 255.0
-                b = (b - 103.939) / 255.0
-
-                # TODO: VGG で読むには BGR の順になってないといけない。VGG 使うなら最初から openCV で読もうな。
-                row.append([b, g, r])
-            bgr_pixels.append(row)
-
-        # img = np.asarray(bgr_pixels)
-        # print(img.shape)
-        # img = Image.fromarray(np.uint8(img))
-        # img.save('./test.jpg')
-
-        return bgr_pixels
+        background_color = (0, 0, 0)
+        width, height = img.size
+        if width == height:
+            return img
+        elif width > height:
+            result = Image.new(img.mode, (width, width), background_color)
+            result.paste(img, (0, (width - height) // 2))
+            return result
+        else:
+            result = Image.new(img.mode, (height, height), background_color)
+            result.paste(img, ((height - width) // 2, 0))
+            return result
 
 
 if __name__ == "__main__":

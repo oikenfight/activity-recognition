@@ -49,6 +49,7 @@ RUN pip install \
     setuptools \
     cupy-cuda91 \
     chainer \
+    chainercv \
     scipy \
     pandas \
     scikit-learn \
