@@ -12,6 +12,7 @@ services:
       - ./:/workspace
       - ../data/:/data
       - ../converted_data/:/converted_data
+      - ../person_data:/person_data
     working_dir: "/workspace"
     tty: true
   python:
@@ -24,5 +25,5 @@ services:
       - ./:/workspace
       - ../data/:/data
       - ../converted_data:/converted_data
-      - ../image_vec_data:/image_vec_data
+      - ../person_data:/person_data
     working_dir: "/workspace"
