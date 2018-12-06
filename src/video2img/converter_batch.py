@@ -69,8 +69,8 @@ if __name__ == "__main__":
     ConverterBatch.FPS = 2
 
     # params
-    input_dir = '/data/STAIR-actions/stair_action/'
-    output_dir = '/converted_data/'
+    input_dir = '/stair_actions/'
+    output_dir = '/images_data/'
 
     # execute
     converter_batch = ConverterBatch(input_dir, output_dir)

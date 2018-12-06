@@ -77,7 +77,6 @@ class ConverterBatch:
                     print('人物検出が明確ではないため削除しました。')
                     break
             print("%s / %s output: %s" % (str(num), str(total), output_video_dir))
-            time.sleep(1)
 
     @staticmethod
     def _dump_to(path, data):
