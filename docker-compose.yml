@@ -10,9 +10,9 @@ services:
       - "8881:8881"
     volumes:
       - ./:/workspace
-      - ../data/:/data
-      - ../converted_data/:/converted_data
-      - ../person_data:/person_data
+      - /media/hdd_mount/oikenfight/STAIR-actions/STAIR_Actions_v1.0:/stair_actions/
+      - /media/hdd_mount/oikenfight/images_data:/images_data
+      - /media/hdd_mount/oikenfight/person_images_data:/person_images_data
     working_dir: "/workspace"
     tty: true
   python:
@@ -23,7 +23,7 @@ services:
       dockerfile: ./docker/python/Dockerfile
     volumes:
       - ./:/workspace
-      - ../data/:/data
-      - ../converted_data:/converted_data
-      - ../person_data:/person_data
+      - /media/hdd_mount/oikenfight/STAIR-actions/STAIR_Actions_v1.0:/stair_actions/
+      - /media/hdd_mount/oikenfight/images_data:/images_data
+      - /media/hdd_mount/oikenfight/person_images_data:/person_images_data
     working_dir: "/workspace"
