@@ -71,6 +71,11 @@ class BaseVGG19(chainer.Chain):
 
         h = F.relu(self.conv5_1(h))
         h = F.relu(self.conv5_2(h))
+
+        # これを入れることで、これ以前の層の誤差逆伝搬の計算をしなくなる！
+        # CNN ならバッチサイズ確保できるし、全層学習させてもいいけど、LRCN と揃えるため。
+        h.unchain_backward()
+
         h = F.relu(self.conv5_3(h))
         h = F.relu(self.conv5_4(h))
         h = F.max_pooling_2d(h, 2, stride=2)

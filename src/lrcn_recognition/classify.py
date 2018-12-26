@@ -88,7 +88,7 @@ if __name__ == '__main__':
     framed_cnn_pkl_path = './output/framed_cnn/20180929_075743.pkl'
     with open(framed_cnn_pkl_path, 'rb') as f:
         dataset = pkl.load(f)
-    print('data number: ', str(len(dataset['label'])))
+    print('sentences number: ', str(len(dataset['label'])))
     actions = dataset['actions_dict']
     features = dataset['features']
     labels = dataset['label']

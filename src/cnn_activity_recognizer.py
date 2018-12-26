@@ -25,20 +25,16 @@ class CnnActivityRecognizer:
     # constant
     GPU_DEVICE = 0
 
-    def __init__(self):
+    def __init__(self, actions: dict):
         self.xp = np
-        self.actions = None
+        self.actions = actions
         self.model = None
         self.img2vec_converter_instance = img2vec.converter.Converter()
+        self._prepare()
 
     def _prepare(self):
-        self._load_actions()
         self._set_model()
         self._to_gpu()
-
-    def _load_actions(self):
-        with open(self.ACTIONS_PATH, mode="rb") as f:
-            self.actions = pkl.load(f)
 
     def _set_model(self):
         print('>>> set CnnActivityRecognitionModel')
@@ -52,12 +48,41 @@ class CnnActivityRecognizer:
             self.model.to_gpu(self.GPU_DEVICE)
 
     def main(self, inputs: list, label: int):
+        """
+
+        :param inputs:
+        :param label:
+        :return:
+        """
         img_paths = self._sanitized_inputs(inputs)
         img_vecs = self._img_to_vec(img_paths)
 
         # テスト実行
         self.model.cleargrads()
-        return self._forward(img_vecs, label)
+
+        # 各画像毎の結果を格納する
+        ys = []
+
+        # この中では推論処理を行う（学習時と推論時で動作が異なる場合に有効だけど、今回は特に関係ないけどね。）
+        with chainer.using_config('train', False):
+            # 計算後にロス関数の各パラメータについての勾配のため、内部に計算グラフを保持するかどうか。推論のときはメモリ節約のため False
+            with chainer.using_config('enable_backprop', False):
+
+                for i in range(len(img_vecs)):
+                    # gpu を使っていれば、cupy に変換される
+                    # バッチサイズ 1 のベクトルを渡してる（学習時と同様に処理するため）
+                    x = self.xp.array([img_vecs[i]]).astype(np.float32)
+                    y = F.softmax(self.model(x)).data[0]
+                    ys.append(y)
+
+        # 各画像の結果をまとめる
+        ys = self.xp.array(ys).astype(np.float32)
+        result = self.xp.average(ys, axis=0)
+        max_value, max_index = float(result.max()), int(result.argmax())
+
+        self._predict_action(max_index)
+        print('max_index:', str(max_index), 'max:', str(max_value))
+        return max_index, max_value, label, result[label]
 
     def _sanitized_inputs(self, inputs: list) -> list:
         """
@@ -65,7 +90,7 @@ class CnnActivityRecognizer:
         :param inputs: list of path string
         :return list: list of sanitized path strings
         """
-        return []
+        return inputs
 
     def _img_to_vec(self, img_paths: list) -> list:
         """
@@ -78,29 +103,14 @@ class CnnActivityRecognizer:
             img_vecs.append(self.img2vec_converter_instance.main(path))
         return img_vecs
 
-    def _forward(self, img_vecs: list, label: int) -> tuple:
-        """
-        順方向計算実行。
-        :param cupy.ndarray image_vec_batch:
-        :param np.ndarray label_batch:
-        :param bool train:
-        :return:
-        """
-        x = self.xp.array(img_vecs).astype(np.float32)
-        t = self.xp.array(range(len(x))).astype(np.int32).fill(label)
-
-        # gpu を使っていれば、cupy に変換される
-        with chainer.using_config('train', False):
-            with chainer.using_config('enable_backprop', False):
-                y = self.model(x)
-                loss = F.softmax_cross_entropy(y, t)
-                accuracy = F.accuracy(y, t)
-        return loss, accuracy
+    def _predict_action(self, max_index: int):
+        result_action = self.actions[max_index]
+        print('>>>> result action is', result_action)
 
 
 if __name__ == "__main__":
     # set up
-    CnnActivityRecognizer.MODEL_PATH = ''
+    CnnActivityRecognizer.MODEL_PATH = 'output/cnn_recognition/models/20181206_202352/0140.model'
     CnnActivityRecognizer.ACTIONS_PATH = ''
     # params
     paths = [

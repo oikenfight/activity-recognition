@@ -3,10 +3,10 @@ from PIL import Image
 import chainer
 
 
-class Converter:
+class PreConverter:
     """
-    画像を読み込んでベクトルに変換するクラス
-    データの構造上 chainer の便利クラス使うとやりづらいので、あえての素の Pillow
+    画像を読み込んでリサイズするクラス
+    学習中にリサイズしてるとデータの読み込みに時間がかかるから、あらかじめ全画像ファイルをリサイズしておく！
     """
     # TODO: 余裕があったらノイズ加えるとかやりたいね。
     # TODO: VGG の学習に使うには 224 x 224 にする必要がある。時間ある時に video2img でサイズやり直す。
@@ -17,22 +17,17 @@ class Converter:
     def __init__(self):
         pass
 
-    def main(self, path):
+    def main(self, input_path: str, output_path: str):
         """
-        :param str path:
-        :return list: list of (self.HEIGHT, self.WIDTH, [b, g, r])
+        :param str input_path:
+        :param str output_path:
         """
-        img = Image.open(path)
-        # img = self._paste_background(img)
+        img = Image.open(input_path)
+        img = self._paste_background(img)
 
-        # see https://github.com/chainer/chainer/blob/v5.0.0/chainer/links/model/vision/vgg.py#L466
-        x = chainer.links.model.vision.vgg.prepare(img)
-
-        # # # 画像保存
-        # img = x.transpose((1, 2, 0))
-        # img = Image.fromarray(np.uint8(img))
-        # img.save('./test.jpg')
-        return x
+        # 画像保存
+        img = Image.fromarray(np.uint8(img))
+        img.save(output_path)
 
     @staticmethod
     def _paste_background(img: np.ndarray):
@@ -61,5 +56,5 @@ if __name__ == "__main__":
     path = '/images_data/20181204_013516/brushing_teeth/a017-0116C/0010.jpg'
 
     # execute
-    converter_instance = Converter()
+    converter_instance = PreConverter()
     converter_instance.main(path)

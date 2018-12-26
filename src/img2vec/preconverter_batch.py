@@ -4,23 +4,21 @@ import sys
 import glob
 import time
 import pickle as pkl
-import shutil
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '.'))
-from converter import Converter
+from preconverter import PreConverter
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from FileManager import FileManager
 
 
-class ConverterBatch:
+class PreConverterBatch:
     """
-    時系列画像データから人物検出を行い、その部分を切り出しつつ、
-    アスペクト比を保ちながら正方形にサイズ変換して保存する
+    時系列画像データをアスペクト比を保ちながら正方形にサイズ変換して保存する
     """
 
     # constant
-    BASE = './src/img2person'
+    BASE = './src/img3vec'
 
     def __init__(self, input_base_dir, output_base_dir):
         self.input_base_dir = input_base_dir                # データの場所は docker-compose でコンテナにマウントすること。
@@ -37,14 +35,15 @@ class ConverterBatch:
         self.target_key = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def main(self):
-        print('<<< ConverterBatch class: main method >>>')
+        print('<<< PreConverterBatch class: main method >>>')
         self._prepare()
 
         all_dir_list = self.file_manager.all_dir_lists()
         total = len(all_dir_list)
+        print(total)
 
         # setup Converter
-        converter_instance = Converter()
+        preconverter_instance = PreConverter()
 
         for num, dir_path_in_list in enumerate(all_dir_list):
             """
@@ -61,21 +60,13 @@ class ConverterBatch:
                 os.makedirs(output_action_dir)
             os.mkdir(output_video_dir)
 
-            incompleted_num = 0
             # フレームを作成して、ラベルと共に追加
             for input_path in image_files:
                 img_name = input_path.split('/')[-1]
                 output_path = output_video_dir + img_name
 
-                try:
-                    converter_instance.main(input_path, output_path)
-                except:
-                    print('人物捻出を検出できなかったので飛ばします。')
-                    incompleted_num += 1
-                if incompleted_num > 3:
-                    shutil.rmtree(output_video_dir)
-                    print('人物検出が明確ではないため削除しました。')
-                    break
+                preconverter_instance.main(input_path, output_path)
+
             print("%s / %s output: %s" % (str(num), str(total), output_video_dir))
 
 
@@ -86,8 +77,8 @@ if __name__ == "__main__":
 
     # params
     input_base_dir = '/images_data/'
-    output_base_dir = '/person_images_data/'
+    output_base_dir = '/resized_images_data/'
 
     # execute
-    converter_batch = ConverterBatch(input_base_dir, output_base_dir)
+    converter_batch = PreConverterBatch(input_base_dir, output_base_dir)
     converter_batch.main()

@@ -1,7 +1,7 @@
 import numpy as np
 import pickle as pkl
 import chainer
-from chainer import serializers, functions as F
+from chainer import serializers, Variable, functions as F
 import cupy
 from lrcn_recognition.LrcnActivityRecognitionModel import LrcnActivityRecognitionModel
 import img2vec
@@ -19,35 +19,29 @@ class LrcnActivityRecognizer:
     """
 
     # constant
-    INPUT_IMAGE_DIR = '/images_data/{datetime}/'
     MODEL_PATH = ''
-    ACTIONS_PATH = ''
 
     # set up
-    GPU_DEVICE = 0
+    GPU_DEVICE = -1
     IMAGE_HEIGHT = 224
     IMAGE_WIDTH = 224
     IMAGE_CHANNEL = 3
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
 
-    def __init__(self):
+    def __init__(self, actions: dict):
         self.xp = np
-        self.actions = None
+        self.actions = actions
         self.model = None
         self.img2vec_converter_instance = img2vec.converter.Converter()
+        self._prepare()
 
     def _prepare(self):
-        self._load_actions()
         self._set_model()
         self._to_gpu()
 
-    def _load_actions(self):
-        with open(self.ACTIONS_PATH, mode="rb") as f:
-            self.actions = pkl.load(f)
-
     def _set_model(self):
-        print('>>> set CnnActivityRecognitionModel')
+        print('>>> set LrcnActivityRecognitionModel')
         self.model = LrcnActivityRecognitionModel(len(self.actions))
         serializers.load_hdf5(self.MODEL_PATH, self.model)
 
@@ -57,21 +51,51 @@ class LrcnActivityRecognizer:
             self.xp = cupy
             self.model.to_gpu(self.GPU_DEVICE)
 
-    def main(self, inputs: list, label: int):
-        img_paths = self._sanitized_inputs(inputs)
+    def main(self, paths: list, label: int):
+        """
+        画像パスのリストとその正解ラベルを受け取り、推測結果と正解ラベルの確度を返却
+        :param paths: string list of paths
+        :param label: int
+        :return:
+        """
+        img_paths = self._sanitized_inputs(paths)
         img_vecs = self._img_to_vec(img_paths)
 
-        # テスト実行
+        self.model.lstm_reset_state()
         self.model.cleargrads()
-        return self._forward(img_vecs, label)
+
+        # 各画像毎の結果を格納する
+        ys = []
+
+        # この中では推論処理を行う（学習時と推論時で動作が異なる場合に有効だけど、今回は特に関係ないけどね。）
+        with chainer.using_config('train', False):
+            # 計算後にロス関数の各パラメータについての勾配のため、内部に計算グラフを保持するかどうか。推論のときはメモリ節約のため False
+            with chainer.using_config('enable_backprop', False):
+
+                for i in range(len(img_vecs)):
+                    # gpu を使っていれば、cupy に変換される
+                    # バッチサイズ 1 のベクトルを渡してる（学習時と同様に処理するため）
+                    x = self.xp.array([img_vecs[i]]).astype(np.float32)
+                    y = F.softmax(self.model(x)).data[0]
+                    ys.append(y)
+
+        # 各画像の結果をまとめる
+        ys = self.xp.array(ys).astype(np.float32)
+        result = self.xp.average(ys, axis=0)
+        max_value, max_index = float(result.max()), int(result.argmax())
+
+        self._predict_action(max_index)
+        print('max_index:', str(max_index), 'max:', str(max_value))
+        return max_index, max_value, label, result[label]
 
     def _sanitized_inputs(self, inputs: list) -> list:
         """
         入力されるパスを、適切なパスに置換する（人物検出が成功したものを基準となる。構造は同じだが、ベースとなる部分が異なる。）
+        TODO: 人物検出をどうするか未定だから、とりあえず何もしないで頑張る
         :param inputs: list of path string
         :return list: list of sanitized path strings
         """
-        return []
+        return inputs
 
     def _img_to_vec(self, img_paths: list) -> list:
         """
@@ -84,39 +108,28 @@ class LrcnActivityRecognizer:
             img_vecs.append(self.img2vec_converter_instance.main(path))
         return img_vecs
 
-    def _forward(self, img_vecs: list, label: int) -> tuple:
-        """
-        順方向計算実行。
-        :param cupy.ndarray image_vec_batch:
-        :param np.ndarray label_batch:
-        :param bool train:
-        :return:
-        """
-        x = self.xp.array([img_vecs]).astype(np.float32)
-        t = self.xp.array(label).astype(np.int32)
-
-        # gpu を使っていれば、cupy に変換される
-        with chainer.using_config('train', False):
-            with chainer.using_config('enable_backprop', False):
-                y = self.model(x)
-                loss = F.softmax_cross_entropy(y, t)
-                accuracy = F.accuracy(y, t)
-        return loss, accuracy
+    def _predict_action(self, max_index: int):
+        result_action = self.actions[max_index]
+        print('>>>> result action is', result_action)
 
 
 if __name__ == "__main__":
     # set up
-    LrcnActivityRecognizer.INPUT_IMAGE_DIR = '/images_data/{datetime}/'
-    LrcnActivityRecognizer.MODEL_PATH = ''
-    LrcnActivityRecognizer.ACTIONS_PATH = ''
+    LrcnActivityRecognizer.MODEL_PATH = 'output/lrcn_recognition/models/20181206_202352/0140.model'
+    ACTIONS_PATH = 'output/lrcn_recognition/models/20181206_202352/actions.pkl'
     # params
     paths = [
-        '/images_data/20181204_013516/drinking/a001-0508C/0001.jpg',
-        '/images_data/20181204_013516/drinking/a001-0508C/0002.jpg',
-        '/images_data/20181204_013516/drinking/a001-0508C/0003.jpg',
-        '/images_data/20181204_013516/drinking/a001-0508C/0004.jpg',
+        '/images_data/20181204_013516/drinking/a001-0508C/0005.jpg',
+        '/images_data/20181204_013516/drinking/a001-0508C/0006.jpg',
+        '/images_data/20181204_013516/drinking/a001-0508C/0007.jpg',
+        '/images_data/20181204_013516/drinking/a001-0508C/0008.jpg',
     ]
-    label = 0
+    with open(ACTIONS_PATH, mode="rb") as f:
+        actions = pkl.load(f)
+    print('action length: ', str(len(actions)))
+    print(actions)
+    label = 16
+
     # instance
-    cnn_predict_instance = LrcnActivityRecognizer()
+    cnn_predict_instance = LrcnActivityRecognizer(actions)
     cnn_predict_instance.main(paths, label)

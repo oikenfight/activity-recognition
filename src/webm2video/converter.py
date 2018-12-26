@@ -50,7 +50,7 @@ if __name__ == '__main__':
     Converter.FPS = 2
 
     # Test input file path
-    input_webm_path = '../data/original-actions/actions/test2/ID0057_test2.webm'
+    input_webm_path = '../sentences/original-actions/actions/test2/ID0057_test2.webm'
     output_dir = './tmp/'
 
     converter = Converter()

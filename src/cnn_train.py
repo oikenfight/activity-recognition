@@ -13,13 +13,14 @@ import random
 from FileManager import FileManager
 from cnn_recognition.CnnActivityRecognitionModel import CnnActivityRecognitionModel
 import img2vec
+from pprint import pprint as pp
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 fig = plt.figure()
 
 
-class Train:
+class CnnTrain:
     """
     CNN だけを用いて切り出された画像から行動認識する。
     全画像データを読み込むのがメモリの問題で不可能だったため、
@@ -35,15 +36,16 @@ class Train:
     GPU_DEVICE = 0
     EPOCH_NUM = 10000
     BACH_SIZE = 50
-    TEST_RATE = 0.2
+    TEST_RATE = 0.3
     IMAGE_HEIGHT = 224
     IMAGE_WIDTH = 224
     IMAGE_CHANNEL = 3
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
-    KEPT_FRAME_SIZE = 17000
-    KEPT_TEST_FRAME_SIZE = 4000
-    THREAD_SIZE = 50
+    KEPT_FRAME_SIZE = 15000
+    KEPT_TEST_FRAME_SIZE = 3000
+    THREAD_SIZE = 100
+    TRAIN_RATE = 0.02
 
     def __init__(self):
         self.xp = np
@@ -59,6 +61,7 @@ class Train:
         # その他、フラグ
         self.save_dir = ''
         self.training = True
+        self.log_file = None
 
         # 学習に使用するデータを常にランダムに更新しながら保持（全データはメモリの都合上読み込めないため。）
         # indexes, frames, labels, images_vec は順同一
@@ -79,6 +82,7 @@ class Train:
         self._set_model_and_optimizer()
         self._make_save_dir()
         self._dump_actions_data()
+        self._dump_test_data()
         self._to_gpu()
         self._init_kept_data()
 
@@ -94,7 +98,7 @@ class Train:
         画像
         :return void:
         """
-        print('>>> load data')
+        print('>>> load frames and labels ')
         FileManager.BASE_DIR = self.INPUT_IMAGE_DIR
         file_manager = FileManager()
 
@@ -158,10 +162,13 @@ class Train:
         self.model = CnnActivityRecognitionModel(len(self.actions))
         optimizer = chainer.optimizers.MomentumSGD()
         self.optimizer = optimizer.setup(self.model)
+
         # 学習済みレイヤの学習率を抑制
         for func_name in self.model.base._children:
             for param in self.model.base[func_name].params():
-                param.update_rule.hyperparam.lr *= 0.1
+                param.update_rule.hyperparam.lr *= self.TRAIN_RATE
+        # # 学習済みレイヤを完全に固定
+        # self.model.base.disable_update()
 
     def _make_save_dir(self):
         save_dir = self.OUTPUT_BASE + datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -174,6 +181,22 @@ class Train:
 
         with open(path, 'wb') as f:
             pkl.dump(self.actions, f, pkl.HIGHEST_PROTOCOL)
+
+    def _dump_test_data(self):
+        """
+        精度検証時にテストに用いたデータのみで検証を行いたいため、追加したメソッド
+        test_indexes を用いて、テストデータのパス一覧を保存する
+        :return:
+        """
+        output_data = []
+        for frame in self.frames[self.test_indexes]:
+            output_data.append(frame)
+
+        path = self.save_dir + '/test_frame_data.pkl'
+        print('dump test frame data : ', path)
+
+        with open(path, 'wb') as f:
+            pkl.dump(output_data, f, pkl.HIGHEST_PROTOCOL)
 
     def _init_kept_data(self):
         # 学習に使用するデータを常にランダムに更新しながら保持（全データはメモリの都合上読み込めないため。）
@@ -212,7 +235,7 @@ class Train:
                 self.kept_images_vec[current_index] = np.array(images_data[j][2], dtype=np.float32)
                 self.kept_labels[current_index] = images_data[j][3]
                 current_index += 1
-            print('init kept data:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_FRAME_SIZE))
+            print('init kept sentences:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_FRAME_SIZE))
         print('>>>>>>> all child threads are completed.')
 
     def _set_kept_test_data(self):
@@ -237,7 +260,7 @@ class Train:
                 self.kept_test_images_vec[current_index] = np.array(images_data[j][2], dtype=np.float32)
                 self.kept_test_labels[current_index] = images_data[j][3]
                 current_index += 1
-            print('init kept test data:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_TEST_FRAME_SIZE))
+            print('init kept test sentences:', str(i+self.THREAD_SIZE), '/', str(self.KEPT_TEST_FRAME_SIZE))
         print('>>>>>>> all child threads are completed.')
 
     def _load_images_from_frame_indexes(self, target_indexes) -> list:
@@ -297,7 +320,10 @@ class Train:
         train_acc, test_acc = [], []
 
         for epoch in range(self.EPOCH_NUM):
+            # open log file to update log
+            self._open_log_file()
             self._print_title('epoch: {}'.format(epoch + 1))
+            self._write_line_to_log('epoch: {}'.format(epoch + 1))
             _train_loss, _train_acc = self._train()
             _test_loss, _test_acc = self._test()
 
@@ -313,10 +339,13 @@ class Train:
                 self._init_kept_data()
 
             # save model
-            if epoch % 50 == 0 and not epoch == 0:
+            if (epoch + 1) % 30 == 0 and not epoch == 1:
                 print('>>> save {0:04d}.model'.format(epoch))
+                self._write_line_to_log('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.state'.format(epoch), self.optimizer)
+            # save and close log file
+            self._close_log_file()
 
     def _train(self):
         print('>>> train start')
@@ -336,6 +365,7 @@ class Train:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+        self._write_line_to_log('train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
         return loss_ave, acc_ave
 
     def _test(self):
@@ -355,6 +385,7 @@ class Train:
 
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
+        self._write_line_to_log('test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
         return loss_ave, acc_ave
 
     def _random_batches_for_train(self) -> list:
@@ -418,6 +449,13 @@ class Train:
                 error += 1
         print('... _check_data_consistency:  acc: %s / %s, error: %s / %s' % (acc, len(all_batch_indexes), error, len(all_batch_indexes)))
 
+    def _open_log_file(self):
+        path = self.save_dir + '/train.log'
+        self.log_file = open(path, mode='a')
+
+    def _close_log_file(self):
+        self.log_file.close()
+
     @staticmethod
     def _loss_plot(epoch, train_loss, test_loss):
         plt.cla()
@@ -446,13 +484,16 @@ class Train:
         print()
         print('<<<< Train class:', s, '>>>>')
 
+    def _write_line_to_log(self, s: str):
+        self.log_file.write(s + '\n')
+
 
 if __name__ == '__main__':
     # setup
-    Train.GPU_DEVICE = 0
-    Train.INPUT_IMAGE_DIR = '/converted_data/20181106_043229/'
-    Train.OUTPUT_BASE = './output/cnn_recognition/models/'
+    CnnTrain.GPU_DEVICE = 0
+    CnnTrain.INPUT_IMAGE_DIR = '/resized_images_data/20181221_111226/'
+    CnnTrain.OUTPUT_BASE = './output/cnn_recognition/models/'
     # params
     # execute
-    train = Train()
-    train.main()
+    cnn_train_instance = CnnTrain()
+    cnn_train_instance.main()

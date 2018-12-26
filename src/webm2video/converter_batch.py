@@ -64,8 +64,8 @@ if __name__ == "__main__":
     ConverterBatch.FRAME_RATE = 30
 
     # params
-    input_dir = '/data/original-actions/webm/actions/'
-    output_dir = '/data/original-actions/actions/'
+    input_dir = '/sentences/original-actions/webm/actions/'
+    output_dir = '/sentences/original-actions/actions/'
 
     # execute
     converter_batch_instance = ConverterBatch(input_dir, output_dir)

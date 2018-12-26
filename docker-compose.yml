@@ -11,7 +11,9 @@ services:
     volumes:
       - ./:/workspace
       - /media/hdd_mount/oikenfight/STAIR-actions/STAIR_Actions_v1.0:/stair_actions/
+      - /media/hdd_mount/oikenfight/actions:/actions/
       - /media/hdd_mount/oikenfight/images_data:/images_data
+      - /media/hdd_mount/oikenfight/resized_images_data:/resized_images_data
       - /media/hdd_mount/oikenfight/person_images_data:/person_images_data
     working_dir: "/workspace"
     tty: true
@@ -24,6 +26,8 @@ services:
     volumes:
       - ./:/workspace
       - /media/hdd_mount/oikenfight/STAIR-actions/STAIR_Actions_v1.0:/stair_actions/
+      - /media/hdd_mount/oikenfight/actions:/actions/
       - /media/hdd_mount/oikenfight/images_data:/images_data
+      - /media/hdd_mount/oikenfight/resized_images_data:/resized_images_data
       - /media/hdd_mount/oikenfight/person_images_data:/person_images_data
     working_dir: "/workspace"
