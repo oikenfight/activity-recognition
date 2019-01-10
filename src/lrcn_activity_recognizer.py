@@ -1,11 +1,14 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 import numpy as np
 import pickle as pkl
 import chainer
-from chainer import serializers, Variable, functions as F
-import cupy
+from chainer import cuda, serializers, Variable, functions as F
 from lrcn_recognition.LrcnActivityRecognitionModel import LrcnActivityRecognitionModel
 import img2vec
 import matplotlib
+from copy import deepcopy
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -22,12 +25,7 @@ class LrcnActivityRecognizer:
     MODEL_PATH = ''
 
     # set up
-    GPU_DEVICE = -1
-    IMAGE_HEIGHT = 224
-    IMAGE_WIDTH = 224
-    IMAGE_CHANNEL = 3
-    FRAME_SIZE = 8
-    OVERLAP_SIZE = 4
+    GPU_DEVICE = 1
 
     def __init__(self, actions: dict):
         self.xp = np
@@ -48,8 +46,8 @@ class LrcnActivityRecognizer:
     def _to_gpu(self):
         if self.GPU_DEVICE >= 0:
             print('>>> use gpu')
-            self.xp = cupy
-            self.model.to_gpu(self.GPU_DEVICE)
+            self.xp = cuda.cupy
+            self.model.to_gpu()
 
     def main(self, paths: list, label: int):
         """
@@ -61,8 +59,10 @@ class LrcnActivityRecognizer:
         img_paths = self._sanitized_inputs(paths)
         img_vecs = self._img_to_vec(img_paths)
 
-        self.model.lstm_reset_state()
-        self.model.cleargrads()
+        model = deepcopy(self.model)
+
+        model.lstm_reset_state()
+        model.cleargrads()
 
         # 各画像毎の結果を格納する
         ys = []
@@ -76,17 +76,19 @@ class LrcnActivityRecognizer:
                     # gpu を使っていれば、cupy に変換される
                     # バッチサイズ 1 のベクトルを渡してる（学習時と同様に処理するため）
                     x = self.xp.array([img_vecs[i]]).astype(np.float32)
-                    y = F.softmax(self.model(x)).data[0]
+                    y = F.softmax(model(x)).data[0]
                     ys.append(y)
+        # メモリ解放
+        model = None
 
         # 各画像の結果をまとめる
-        ys = self.xp.array(ys).astype(np.float32)
+        ys = self.xp.array(ys, dtype=np.float32)
         result = self.xp.average(ys, axis=0)
-        max_value, max_index = float(result.max()), int(result.argmax())
+        max_value, max_label = float(result.max()), int(result.argmax())
 
-        self._predict_action(max_index)
-        print('max_index:', str(max_index), 'max:', str(max_value))
-        return max_index, max_value, label, result[label]
+        self._predict_action(max_label)
+        # print('max_label:', str(max_label), 'max:', str(max_value))
+        return max_label, max_value, label, float(result[label])
 
     def _sanitized_inputs(self, inputs: list) -> list:
         """
@@ -110,7 +112,7 @@ class LrcnActivityRecognizer:
 
     def _predict_action(self, max_index: int):
         result_action = self.actions[max_index]
-        print('>>>> result action is', result_action)
+        # print('>>>> result action is', result_action)
 
 
 if __name__ == "__main__":

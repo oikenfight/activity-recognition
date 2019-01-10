@@ -12,6 +12,7 @@ from FileManager import FileManager
 from lrcn_recognition.LrcnActivityRecognitionModel import LrcnActivityRecognitionModel
 import img2vec
 from pprint import pprint as pp
+import random
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -31,21 +32,21 @@ class Train:
     OUTPUT_BASE = './output/lrcn_recognition/models/'
 
     # setup
-    GPU_DEVICE = 0
+    GPU_DEVICE = 1
     EPOCH_NUM = 100000
     FEATURE_SIZE = 4096
     HIDDEN_SIZE = 512
-    BACH_SIZE = 100
-    TEST_RATE = 0.3
+    BACH_SIZE = 10
+    TEST_RATE = 0.4
     IMAGE_HEIGHT = 224
     IMAGE_WIDTH = 224
     IMAGE_CHANNEL = 3
     FRAME_SIZE = 8
     OVERLAP_SIZE = 4
-    KEPT_FRAME_SIZE = 15000
-    KEPT_TEST_FRAME_SIZE = 3000
+    KEPT_FRAME_SIZE = 150
+    KEPT_TEST_FRAME_SIZE = 50
     THREAD_SIZE = 50
-    TRAIN_RATE = 0.02
+    TRAIN_RATE = 0.05
 
     def __init__(self):
         self.xp = np
@@ -62,6 +63,9 @@ class Train:
         self.save_dir = ''
         self.training = True
         self.log_file = None
+
+        # インスタンスを準備
+        self.img2vec_converter_instance = img2vec.converter.Converter()
 
         # 学習に使用するデータを常にランダムに更新しながら保持（全データはメモリの都合上読み込めないため。）
         # indexes, frames, labels, images_vec は順同一
@@ -83,6 +87,7 @@ class Train:
         self._make_save_dir()
         self._dump_actions_data()
         self._dump_test_data()
+        self._dump_train_data()
         self._to_gpu()
         self._init_kept_data()
 
@@ -160,6 +165,11 @@ class Train:
     def _set_model_and_optimizer(self) -> LrcnActivityRecognitionModel:
         self._print_title('set model:')
         self.model = LrcnActivityRecognitionModel(len(self.actions))
+
+        # TODO: 途中まで学習したモデルを使う（時間省略のため暫定的）
+        tmp_model_path = './output/lrcn_recognition/models/20190101_063332/0059.model'
+        serializers.load_hdf5(tmp_model_path, self.model)
+
         optimizer = chainer.optimizers.MomentumSGD()
         self.optimizer = optimizer.setup(self.model)
 
@@ -194,6 +204,22 @@ class Train:
 
         path = self.save_dir + '/test_frame_data.pkl'
         print('dump test frame data : ', path)
+
+        with open(path, 'wb') as f:
+            pkl.dump(output_data, f, pkl.HIGHEST_PROTOCOL)
+
+    def _dump_train_data(self):
+        """
+        精度検証時に学習に用いたデータのみで検証を行いたいため、追加したメソッド
+        test_indexes を用いて、テストデータのパス一覧を保存する
+        :return:
+        """
+        output_data = []
+        for frame in self.frames[self.train_indexes]:
+            output_data.append(frame)
+
+        path = self.save_dir + '/train_frame_data.pkl'
+        print('dump train frame data : ', path)
 
         with open(path, 'wb') as f:
             pkl.dump(output_data, f, pkl.HIGHEST_PROTOCOL)
@@ -289,21 +315,20 @@ class Train:
 
         return images_data
 
-    @staticmethod
-    def _load_images_thread(target_index: int, frame: list, label: int, images_data: list):
+    def _load_images_thread(self, target_index: int, frame: list, label: int, images_data: list):
         """
         _update_kept_data_constantly_thread の子スレッドとして呼ばれ、与えられた frame の画像を読み込む。
         マルチスレッドとして働く。
         :param frame:
         :return:
         """
-        # インスタンスを準備
-        img2vec_converter_instance = img2vec.converter.Converter()
         # 画像読み込み
         images = []
         images_vec = []
+        mirroring = random.choice([True, False])
+
         for path in frame:
-            vec = img2vec_converter_instance.main(path)
+            vec = self.img2vec_converter_instance.main(path, mirroring)
             images.append(path)
             images_vec.append(vec)
         # バッチデータに結果を追加
@@ -339,7 +364,7 @@ class Train:
                 self._init_kept_data()
 
             # save model
-            if (epoch + 1) % 20 == 0 and not epoch == 1:
+            if (epoch + 1) % 10 == 0 and not epoch == 1:
                 print('>>> save {0:04d}.model'.format(epoch))
                 self._write_line_to_log('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
@@ -454,7 +479,7 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_loss))
         plt.xlabel('epochs')
         plt.ylabel('loss')
-        plt.savefig('./output/lrcn_recognition/loss.png')
+        plt.savefig('./output/person_lrcn_recognition/loss.png')
 
     @staticmethod
     def _acc_plot(epoch, train_acc, test_acc):
@@ -463,7 +488,17 @@ class Train:
         plt.plot(np.arange(epoch + 1), np.array(test_acc))
         plt.xlabel('epochs')
         plt.ylabel('acc')
-        plt.savefig('./output/lrcn_recognition/acc.png')
+        plt.savefig('./output/person_lrcn_recognition/acc.png')
+
+    def _open_log_file(self):
+        path = self.save_dir + '/train.log'
+        self.log_file = open(path, mode='a')
+
+    def _write_line_to_log(self, s: str):
+        self.log_file.write(s + '\n')
+
+    def _close_log_file(self):
+        self.log_file.close()
 
     @staticmethod
     def _print_title(s: str):
@@ -475,18 +510,16 @@ class Train:
         print()
         print('<<<< Train class:', s, '>>>>')
 
-    def _write_line_to_log(self, s: str):
-        self.log_file.write(s + '\n')
-
 
 if __name__ == '__main__':
     # setup
     Train.GPU_DEVICE = 0
-    Train.INPUT_IMAGE_DIR = '/images_data/20181204_013516/'
-    Train.OUTPUT_BASE = './output/lrcn_recognition/models/'
-    # Train.INPUT_IMAGE_DIR = '/person_data/20181127_061554/'
-    # Train.OUTPUT_BASE = './output/person_lrcn_recognition/models/'
+    # Train.INPUT_IMAGE_DIR = '/resized_images_data/background_pasted_images/'
+    # Train.OUTPUT_BASE = './output/lrcn_recognition/models/'
+    Train.INPUT_IMAGE_DIR = '/resized_images_data/background_pasted_images/'
+    Train.OUTPUT_BASE = './output/person_lrcn_recognition/models/'
     # params
     # execute
     train = Train()
     train.main()
+

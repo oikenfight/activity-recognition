@@ -27,11 +27,13 @@ class Converter:
             os.makedirs(output_dir)
 
         # 横サイズを 300 にして、縦はアスペクト比を変更しないように自動スケールする
-        size_option = 'scale=%s:-1' % self.WIDTH
+        # size_option = '"scale=%s:-1"' % self.WIDTH
 
         print('>>> execute ffmpeg command.')
-        convert_command = "ffmpeg -i " + input_path + " -f image2 fps=" + str(self.FPS)\
-                          + ' -vf ' + size_option + " " + output_dir + "%04d.jpg"
+        # convert_command = "ffmpeg -i " + input_path + " -f image2 fps=" + str(self.FPS)\
+        #                   + ' -vf ' + size_option + " " + output_dir + "%04d.jpg"
+
+        convert_command = "ffmpeg -i " + input_path + " -f image2 -vf fps=" + str(self.FPS) + " " + output_dir + "%04d.jpg"
         print(convert_command)
         result_status = os.system(convert_command)
 
@@ -59,9 +61,10 @@ if __name__ == '__main__':
     Converter.FPS = 2
 
     # Test input file path
-    input_path = '/stair_action/washing_hands/a007-0477C.mp4'
+    input_path = '/stair_actions/putting_on_cloth/a052-0357C.mp4'
     output_dir = './tmp/'
 
     converter = Converter()
     converter.main(input_path, output_dir)
+
 

@@ -6,8 +6,6 @@ services:
     build:
       context: ./
       dockerfile: docker/workspace/Dockerfile
-    ports:
-      - "8881:8881"
     volumes:
       - ./:/workspace
       - /media/hdd_mount/oikenfight/STAIR-actions/STAIR_Actions_v1.0:/stair_actions/

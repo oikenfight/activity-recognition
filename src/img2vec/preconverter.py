@@ -25,6 +25,9 @@ class PreConverter:
         img = Image.open(input_path)
         img = self._paste_background(img)
 
+        # 画像をリサイズ
+        resized_image = self._resize_img(img)
+
         # 画像保存
         img = Image.fromarray(np.uint8(img))
         img.save(output_path)
@@ -49,12 +52,50 @@ class PreConverter:
             result.paste(img, ((height - width) // 2, 0))
             return result
 
+    def _resize_img(self, img: Image):
+        """
+        指定の大きさにリサイズ
+        :param Image img:
+        :return:
+        """
+        return img.resize((self.WIDTH, self.HEIGHT), Image.LANCZOS)
+
 
 if __name__ == "__main__":
     # setup
     # params
-    path = '/images_data/20181204_013516/brushing_teeth/a017-0116C/0010.jpg'
+    input_paths = [
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/001.jpg',
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/002.jpg',
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/003.jpg',
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/004.jpg',
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/005.jpg',
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/006.jpg',
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/007.jpg',
+        # '/resized_images_data/20181221_111226/putting_on_cloth/a052-0289C/008.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/001.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/002.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/003.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/004.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/005.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/006.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/007.jpg',
+        '/images_data/20181204_013516//putting_on_cloth/a052-0289C/008.jpg',
+    ]
+    output_paths = [
+        './tmp/a052-0289C_result/001.jpg',
+        './tmp/a052-0289C_result/002.jpg',
+        './tmp/a052-0289C_result/003.jpg',
+        './tmp/a052-0289C_result/004.jpg',
+        './tmp/a052-0289C_result/005.jpg',
+        './tmp/a052-0289C_result/006.jpg',
+        './tmp/a052-0289C_result/007.jpg',
+        './tmp/a052-0289C_result/008.jpg',
+    ]
 
     # execute
     converter_instance = PreConverter()
-    converter_instance.main(path)
+
+    for input_path, output_path in zip(input_paths, output_paths):
+        converter_instance.main(input_path, output_path)
+

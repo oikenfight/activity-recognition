@@ -12,3 +12,7 @@ src/VGG_ILSVRC_19_layers.caffemodel
 src/VGG_ILSVRC_19_layers.npz
 src/VGG_ILSVRC_16_layers.caffemodel
 src/VGG_ILSVRC_16_layers.npz
+tmp/img2person_batch.log
+tmp/recognition.log
+tmp/reversed_img2person_batch.log
+venv/

@@ -14,6 +14,7 @@ cnn_recognition/models/*
 lrcn_recognition/loss.png
 lrcn_recognition/acc.png
 lrcn_recognition/models/*
+lrcn_recognition/graphs/backup
 person_lrcn_recognition/loss.png
 person_lrcn_recognition/acc.png
 person_lrcn_recognition/models/*

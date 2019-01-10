@@ -1,5 +1,5 @@
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 import chainer
 
 
@@ -17,12 +17,15 @@ class Converter:
     def __init__(self):
         pass
 
-    def main(self, path):
+    def main(self, path, mirror=False):
         """
         :param str path:
         :return list: list of (self.HEIGHT, self.WIDTH, [b, g, r])
         """
         img = Image.open(path)
+        # フレームによってランダムに左右反転される
+        if mirror:
+            img = ImageOps.mirror(img)
         # img = self._paste_background(img)
 
         # see https://github.com/chainer/chainer/blob/v5.0.0/chainer/links/model/vision/vgg.py#L466

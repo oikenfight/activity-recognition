@@ -1,8 +1,10 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 import numpy as np
 import pickle as pkl
 import chainer
-from chainer import serializers, functions as F
-import cupy
+from chainer import cuda, serializers, functions as F
 from cnn_recognition.CnnActivityRecognitionModel import CnnActivityRecognitionModel
 import img2vec
 import matplotlib
@@ -20,10 +22,9 @@ class CnnActivityRecognizer:
 
     # set up
     MODEL_PATH = ''
-    ACTIONS_PATH = ''
 
     # constant
-    GPU_DEVICE = 0
+    GPU_DEVICE = 1
 
     def __init__(self, actions: dict):
         self.xp = np
@@ -44,12 +45,11 @@ class CnnActivityRecognizer:
     def _to_gpu(self):
         if self.GPU_DEVICE >= 0:
             print('>>> use gpu')
-            self.xp = cupy
-            self.model.to_gpu(self.GPU_DEVICE)
+            self.xp = cuda.cupy
+            self.model.to_gpu()
 
     def main(self, inputs: list, label: int):
         """
-
         :param inputs:
         :param label:
         :return:
@@ -74,15 +74,13 @@ class CnnActivityRecognizer:
                     x = self.xp.array([img_vecs[i]]).astype(np.float32)
                     y = F.softmax(self.model(x)).data[0]
                     ys.append(y)
-
         # 各画像の結果をまとめる
-        ys = self.xp.array(ys).astype(np.float32)
+        ys = self.xp.array(ys, dtype=np.float32)
         result = self.xp.average(ys, axis=0)
-        max_value, max_index = float(result.max()), int(result.argmax())
+        max_value, max_label = float(result.max()), int(result.argmax())
 
-        self._predict_action(max_index)
-        print('max_index:', str(max_index), 'max:', str(max_value))
-        return max_index, max_value, label, result[label]
+        self._predict_action(max_label)
+        return max_label, max_value, label, float(result[label])
 
     def _sanitized_inputs(self, inputs: list) -> list:
         """
@@ -105,13 +103,12 @@ class CnnActivityRecognizer:
 
     def _predict_action(self, max_index: int):
         result_action = self.actions[max_index]
-        print('>>>> result action is', result_action)
+        # print('>>>> result action is', result_action)
 
 
 if __name__ == "__main__":
     # set up
     CnnActivityRecognizer.MODEL_PATH = 'output/cnn_recognition/models/20181206_202352/0140.model'
-    CnnActivityRecognizer.ACTIONS_PATH = ''
     # params
     paths = [
         '/images_data/20181204_013516/drinking/a001-0508C/0001.jpg',

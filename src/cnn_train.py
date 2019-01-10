@@ -14,6 +14,7 @@ from FileManager import FileManager
 from cnn_recognition.CnnActivityRecognitionModel import CnnActivityRecognitionModel
 import img2vec
 from pprint import pprint as pp
+import random
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -35,8 +36,8 @@ class CnnTrain:
     # setup
     GPU_DEVICE = 0
     EPOCH_NUM = 10000
-    BACH_SIZE = 50
-    TEST_RATE = 0.3
+    BACH_SIZE = 100
+    TEST_RATE = 0.4
     IMAGE_HEIGHT = 224
     IMAGE_WIDTH = 224
     IMAGE_CHANNEL = 3
@@ -45,7 +46,7 @@ class CnnTrain:
     KEPT_FRAME_SIZE = 15000
     KEPT_TEST_FRAME_SIZE = 3000
     THREAD_SIZE = 100
-    TRAIN_RATE = 0.02
+    TRAIN_RATE = 0.03
 
     def __init__(self):
         self.xp = np
@@ -62,6 +63,9 @@ class CnnTrain:
         self.save_dir = ''
         self.training = True
         self.log_file = None
+
+        # インスタンスを準備
+        self.img2vec_converter_instance = img2vec.converter.Converter()
 
         # 学習に使用するデータを常にランダムに更新しながら保持（全データはメモリの都合上読み込めないため。）
         # indexes, frames, labels, images_vec は順同一
@@ -289,21 +293,20 @@ class CnnTrain:
 
         return images_data
 
-    @staticmethod
-    def _load_images_thread(target_index: int, frame: list, label: int, images_data: list):
+    def _load_images_thread(self, target_index: int, frame: list, label: int, images_data: list):
         """
         _update_kept_data_constantly_thread の子スレッドとして呼ばれ、与えられた frame の画像を読み込む。
         マルチスレッドとして働く。
         :param frame:
         :return:
         """
-        # インスタンスを準備
-        img2vec_converter_instance = img2vec.converter.Converter()
         # 画像読み込み
         images = []
         images_vec = []
+        mirroring = random.choice([True, False])
+
         for path in frame:
-            vec = img2vec_converter_instance.main(path)
+            vec = self.img2vec_converter_instance.main(path, mirroring)
             images.append(path)
             images_vec.append(vec)
         # バッチデータに結果を追加
@@ -322,8 +325,8 @@ class CnnTrain:
         for epoch in range(self.EPOCH_NUM):
             # open log file to update log
             self._open_log_file()
-            self._print_title('epoch: {}'.format(epoch + 1))
-            self._write_line_to_log('epoch: {}'.format(epoch + 1))
+            self._print_title('epoch: {}'.format(epoch))
+            self._write_line_to_log('epoch: {}'.format(epoch))
             _train_loss, _train_acc = self._train()
             _test_loss, _test_acc = self._test()
 
@@ -335,11 +338,11 @@ class CnnTrain:
             self._loss_plot(epoch, train_loss, test_loss)
             self._acc_plot(epoch, train_acc, test_acc)
 
-            if epoch % 5 == 0 and not epoch == 0:
+            if epoch % 20 == 0 and not epoch == 0:
                 self._init_kept_data()
 
             # save model
-            if (epoch + 1) % 30 == 0 and not epoch == 1:
+            if (epoch + 1) % 40 == 0 and not epoch == 1:
                 print('>>> save {0:04d}.model'.format(epoch))
                 self._write_line_to_log('>>> save {0:04d}.model'.format(epoch))
                 serializers.save_hdf5(self.save_dir + '/{0:04d}.model'.format(epoch), self.model)
@@ -363,6 +366,7 @@ class CnnTrain:
             acc.append(_acc.data.tolist())
             if i % 50 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
+                self._write_line_to_log('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
         self._write_line_to_log('train loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
@@ -382,6 +386,7 @@ class CnnTrain:
             acc.append(_acc.data.tolist())
             if i % 50 == 0:
                 print('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
+                self._write_line_to_log('{} / {} loss: {} accuracy: {}'.format(i, batch_num, str(np.average(loss)), str(np.average(acc))))
 
         loss_ave, acc_ave = np.average(loss), np.average(acc)
         print('======= This epoch test loss: {} accuracy: {}'.format(str(loss_ave), str(acc_ave)))
@@ -421,11 +426,6 @@ class CnnTrain:
         :param bool train:
         :return:
         """
-        # 常に固定のバッチサイズで来るとは限らない（最後のバッチとか）
-        batch_size = len(image_vec_batch)
-        # VGG の入力 (batch_size, chennels, height, width) = (batch_size, 3, 224, 224) に合わせる
-        # _x = self.xp.array(image_vec_batch).astype(np.float32).reshape(batch_size, self.IMAGE_HEIGHT, self.IMAGE_WIDTH, self.IMAGE_CHANNEL)
-        # x = _x.transpose((0, 3, 1, 2))
         x = self.xp.array(image_vec_batch).astype(np.float32)
         t = self.xp.array(label_batch).astype(np.int32)
 
@@ -452,6 +452,9 @@ class CnnTrain:
     def _open_log_file(self):
         path = self.save_dir + '/train.log'
         self.log_file = open(path, mode='a')
+
+    def _write_line_to_log(self, s: str):
+        self.log_file.write(s + '\n')
 
     def _close_log_file(self):
         self.log_file.close()
@@ -483,9 +486,6 @@ class CnnTrain:
         """
         print()
         print('<<<< Train class:', s, '>>>>')
-
-    def _write_line_to_log(self, s: str):
-        self.log_file.write(s + '\n')
 
 
 if __name__ == '__main__':

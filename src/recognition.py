@@ -1,10 +1,9 @@
 from datetime import datetime
-import os
 import pickle as pkl
-from FileManager import FileManager
 from cnn_activity_recognizer import CnnActivityRecognizer
 from lrcn_activity_recognizer import LrcnActivityRecognizer
 import threading
+import numpy as np
 import time
 from pprint import pprint as pp
 
@@ -21,10 +20,10 @@ class Recognition:
     INPUT_PERSON_IMAGES_DIR = '/person_images_data/{datetime}/'
     INPUT_IMAGES_DIR = '/images_data/{datetime}/'
     ACTIONS_PATH = ''
-    CNN_MODEL_PATH  = ''
-    LRCN_MODEL_PATH = ''
-    PERSON_LRCN_MODEL_PATH = ''
-    THREAD_SIZE = 5
+    TEST_DATA_FILE = ''
+    MODEL_PATH = ''
+    METHOD_TYPE = ''  # cnn or lrcn or person_lrcn
+    THREAD_SIZE = 7
 
     # constant
     IMAGE_HEIGHT = 224
@@ -34,30 +33,16 @@ class Recognition:
     OVERLAP_SIZE = 4
 
     def __init__(self):
-        self.target_key = ''
-        self.file_manager = None
-        self.actions = None
-        self.recognition_results = None
-        self.cnn_activity_recognizer_instance = None
-        self.lrcn_activity_recognizer_instance = None
-        self.person_lrcn_activity_recognizer_instance = None
-        self.recognition_results = {}
-        self.current_label = None
-        self.current_action = None
+        self.actions = {}
+        self.test_data_paths = []
+        self.recognizer_instance = None
+        self.recognized_result = {}
+        self.log_file = None
 
     def _prepare(self):
-        self._set_file_manager()
         self._load_actions()
+        self._load_test_data()
         self._set_recognizer()
-        self._init_recognition_results()
-
-    def _set_file_manager(self):
-        # ファイルを取得する準備
-        # FileManager.BASE_DIR = self.INPUT_PERSON_IMAGES_DIR
-        FileManager.BASE_DIR = self.INPUT_IMAGES_DIR
-        self.file_manager = FileManager()
-        # 保存先ディレクトリを作成
-        self.target_key = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def _load_actions(self):
         with open(self.ACTIONS_PATH, mode="rb") as f:
@@ -65,92 +50,57 @@ class Recognition:
         print('action length: ', str(len(self.actions)))
         print(self.actions)
 
+    def _load_test_data(self):
+        with open(self.TEST_DATA_FILE, mode="rb") as f:
+            self.test_data_paths = pkl.load(f)
+        print('test data length: ', str(len(self.test_data_paths)))
+
     def _set_recognizer(self):
-        # cnn activity recognizer instance
-        CnnActivityRecognizer.MODEL_PATH = self.CNN_MODEL_PATH
-        # self.cnn_activity_recognizer_instance = CnnActivityRecognizer()
+        # TODO: ここは手動で切り替えることにしよう。ちょっと時間がない
+
+        # # cnn activity recognizer instance
+        # CnnActivityRecognizer.MODEL_PATH = self.MODEL_PATH
+        # self.recognizer_instance = CnnActivityRecognizer(self.actions)
 
         # lrcn activity recognizer instance
-        LrcnActivityRecognizer.MODEL_PATH = self.LRCN_MODEL_PATH
-        self.lrcn_activity_recognizer_instance = LrcnActivityRecognizer(self.actions)
+        LrcnActivityRecognizer.MODEL_PATH = self.MODEL_PATH
+        self.recognizer_instance = LrcnActivityRecognizer(self.actions)
 
-        # person lrcn activity recognizer instance
-        LrcnActivityRecognizer.MODEL_PATH = self.PERSON_LRCN_MODEL_PATH
-        # self.person_lrcn_activity_recognizer_instance = LrcnActivityRecognizer()
-
-    def _init_recognition_results(self):
-        """
-        認識結果データを格納。各データにつき構造は以下の通り。
-        {
-            '{action_name}': {
-                '{video_name}': [
-                    {
-                        'cnn': ({max_index}, {max_value}, {actual_index}, {actual_value}),
-                        'lrcn': ({max_index}, {max_value}, {actual_index}, {actual_value}),
-                        'person_lrcn': ({max_index}, {max_value}, {actual_index}, {actual_value}),
-                    },
-                    ...
-                ]
-            },
-            ...
-        }
-        :return:
-        """
-        for label, action_name in self.actions.items():
-            self.recognition_results[action_name] = {}
-
-    def _append_video_recognition_result(self, action_name: str, video_name: str, results: dict):
-        # TODO: add cnn and person_lrcn result
-        print('_lrcn_result', results['lrcn'])
-        if not self.recognition_results[action_name].get(video_name):
-            self.recognition_results[action_name][video_name] = [results]
-        else:
-            self.recognition_results[action_name][video_name].append(results)
+        # # person lrcn activity recognizer instance
+        # LrcnActivityRecognizer.MODEL_PATH = self.MODEL_PATH
+        # # self.recognizer_instance = LrcnActivityRecognizer(self.actions)
 
     def main(self):
         print('<<< Recognition class: main method >>>')
         self._prepare()
 
-        all_dir_with_list = self.file_manager.all_dir_lists()
-        total = len(all_dir_with_list)
-
+        data_length = len(self.test_data_paths)
+        print(data_length)
         threads_data = []
-        for num, dir_path_with_list in enumerate(all_dir_with_list):
-            """
-            dir_path_with_list[0]: アクション名
-            dir_path_with_list[1]: ビデオ名
-            """
-            self.current_label = self._get_action_label(dir_path_with_list[0])
-            # input_person_dir = self.INPUT_PERSON_IMAGES_DIR + '/'.join(dir_path_with_list) + '/'
-            input_image_dir = self.INPUT_IMAGES_DIR + '/'.join(dir_path_with_list) + '/'
-            # images = sorted(os.listdir(input_person_dir))
-            images = sorted(os.listdir(input_image_dir))
+        for i, frame in enumerate(self.test_data_paths):
+            action_name = frame[0].split('/')[3]
+            video_name = frame[0].split('/')[4]
+            action_label = self._get_action_label(action_name)
 
-            # フレームを作成して、ラベルと共に追加
-            for i in range(0, len(images), self.OVERLAP_SIZE):
-                frame_images = images[i:i+self.FRAME_SIZE]
-                # TODO: 微妙に 8 フレームに足りてないデータを無駄にしてるから、できたら直す（学習する時にフレーム数が一定のほうが楽だから今はこうしてる。）
-                if len(frame_images) < 8:
-                    break
+            threads_data.append((frame, action_name, video_name, action_label))
+            if len(threads_data) >= self.THREAD_SIZE:
+                start = datetime.now()
+                self._do_recognition(threads_data)
+                print(i, '/', data_length, 'is completed.', 'time:', (datetime.now() - start))
+                self._open_log_file()
+                self._write_line_to_log(str(i) + '/' + str(data_length) + 'is completed. time:' + str((datetime.now() - start)))
+                self._close_log_file()
+                threads_data = []
 
-                # person_frame = [input_person_dir + filename for filename in frame_images]
-                image_frame = [input_image_dir + filename for filename in frame_images]
-
-                # スレッドで推測を実行
-                if len(threads_data) < self.THREAD_SIZE:
-                    # threads_data.append(frame_images, person_frame)
-                    threads_data.append((image_frame, dir_path_with_list[0], dir_path_with_list[1]))
-                else:
-                    self._do_recognition(threads_data)
-                    print(num, '/', total, 'is completed.')
-                    threads_data = []
-        if not threads_data == []:
+            # if i > 1001:
+            #     break
+        else:
             self._do_recognition(threads_data)
-            threads_data = []
+
         self._dump_to()
 
     def _get_action_label(self, action_name: str) -> int:
-        # TODO: actions.pkl から読み込んだ辞書をつかって、アクション名から正解ラベルを取得
+        # actions.pkl から読み込んだ辞書をつかって、アクション名から正解ラベルを取得
         keys = [key for key, value in self.actions.items() if action_name == value]
         if len(keys) == 1:
             return keys[0]
@@ -160,7 +110,7 @@ class Recognition:
     def _do_recognition(self, thread_data: list):
         """
         スレッドを実行。
-        :param thread_data: list of tuple of (image_frame, action_name, video_name)
+        :param thread_data: list of tuple of (frame, action_name, video_name, action_label)
         :return:
         """
         thread_list = []
@@ -175,57 +125,64 @@ class Recognition:
         # 全てのスレッドが完了するのを待機
         for thread in thread_list:
             thread.join()
+        # print('did recognition')
         return
 
     def _recognize_thread(self, data: tuple):
         # 各手法で認識を行う
+        frame = data[0]
         action_name = data[1]
         video_name = data[2]
+        action_label = data[3]
+        try:
+            result = self.recognizer_instance.main(frame, action_label)
+        except Exception as e:
+            print(e)
+            self._open_log_file()
+            self._write_line_to_log(action_name + '/' + video_name + 'でなんかエラー吐いた')
+            self._close_log_file()
 
-        # _cnn_acc = self._cnn_recognize(data[0])
-        _lrcn_result = self._lrcn_recognize(data[0])
-        # _person_lrcn_result = self._person_lrcn_recognize(data[0])
+        # print('max_label:', str(result[0]), 'max_value:', str(result[1]), 'actual_label:', str(result[2]), 'actual_value:', result[3])
 
-        results = {
-            'cnn': (),
-            'lrcn': _lrcn_result,
-            'person_lrcn': (),
-        }
-        self._append_video_recognition_result(action_name, video_name, results)
-
-    def _cnn_recognize(self, image_frame: list):
-        max_index, max_value, actual_label, actual_value = self.cnn_activity_recognizer_instance.main(image_frame)
-        return max_index, max_value, actual_label, actual_value
-
-    def _lrcn_recognize(self, image_frame: list):
-        max_index, max_value, actual_label, actual_value = self.lrcn_activity_recognizer_instance.main(image_frame, self.current_label)
-        return max_index, max_value, actual_label, actual_value
-
-    def _person_lrcn_recognize(self, person_frame: list, label: int):
-        max_index, max_value, actual_label, actual_value = self.person_lrcn_activity_recognizer_instance.main(person_frame)
-        return max_index, max_value, actual_label, actual_value
+        if not self.recognized_result.get(action_name):
+            # 新規アクションの場合
+            self.recognized_result[action_name] = {}
+        if not self.recognized_result[action_name].get(video_name):
+            # 新規ビデオの場合
+            self.recognized_result[action_name][video_name] = [result]
+        else:
+            # 同じビデオの別フレームが存在する場合
+            self.recognized_result[action_name][video_name].append(result)
 
     def _dump_to(self):
-        save_path = './' + self.target_key + '_result.pkl'
+        current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        save_path = './' + current_time + '_' + self.METHOD_TYPE + '_result.pkl'
         print('dump to result as : ' + save_path)
 
-        # 保存されているデータを一旦削除
-        if os.path.isfile(save_path):
-            os.remove(save_path)
-
         with open(save_path, 'wb') as f:
-            pkl.dump(self.recognition_results, f, pkl.HIGHEST_PROTOCOL)
+            pkl.dump(self.recognized_result, f, pkl.HIGHEST_PROTOCOL)
+
+    def _open_log_file(self):
+        path = './tmp/recognition.log'
+        self.log_file = open(path, mode='a')
+
+    def _write_line_to_log(self, s: str):
+        self.log_file.write(s + '\n')
+
+    def _close_log_file(self):
+        self.log_file.close()
 
 
 if __name__ == '__main__':
+    #
     # set up
-    Recognition.INPUT_PERSON_IMAGES_DIR = '/person_images_data/{datetime}/'
-    # Recognition.INPUT_IMAGES_DIR = '/images_data/20181204_013516/'
-    Recognition.INPUT_IMAGES_DIR = '/images_data/test/'
-    Recognition.ACTIONS_PATH = 'output/lrcn_recognition/models/20181206_202352/actions.pkl'
-    Recognition.CNN_MODEL_PATH  = ''
-    Recognition.LRCN_MODEL_PATH = 'output/lrcn_recognition/models/20181206_202352/0140.model'
-    Recognition.PERSON_LRCN_MODEL_PATH = ''
+    #
+    Recognition.ACTIONS_PATH = 'output/lrcn_recognition/models/20190101_063332/actions.pkl'
+    Recognition.TEST_DATA_FILE = 'output/lrcn_recognition/models/20190101_063332/test_frame_data.pkl'
+    Recognition.MODEL_PATH = 'output/lrcn_recognition/models/20190101_063332/0099.model'
+    Recognition.METHOD_TYPE = 'lrcn'
+
     # params
     # instance
     recognition_instance = Recognition()

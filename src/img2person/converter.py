@@ -1,11 +1,12 @@
-import chainer
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 from chainercv.datasets import voc_bbox_label_names
 from chainercv.links import YOLOv3
-from chainercv import utils
-from chainercv.visualizations import vis_bbox
+from chainer import cuda
 from PIL import Image
 import numpy as np
-import cupy
+from pprint import pprint as pp
 
 import matplotlib
 matplotlib.use('Agg')
@@ -22,13 +23,14 @@ class Converter:
     WIDTH = 224
     HEIGHT = 224
     CONVERT_TYPE = 'RGB'
-    GPU_DEVICE = 0
+    GPU_DEVICE = 1
     PERSON_LABEL = 14
 
     def __init__(self):
+        self.xp = np
         self.model = None
-        self.original_height = 270  # default
-        self.original_width = 360  # default
+        self.original_height = None  # default
+        self.original_width = None  # default
         self._prepare()
 
     def _prepare(self):
@@ -44,8 +46,8 @@ class Converter:
     def _to_gpu(self):
         print('>>> use gpu')
         if self.GPU_DEVICE >= 0:
-            chainer.cuda.get_device_from_id(self.GPU_DEVICE).use()
-            self.model.to_gpu(self.GPU_DEVICE)
+            self.xp = cuda.cupy
+            self.model.to_gpu()
 
     def main(self, input_path: str, output_path: str):
         """
@@ -57,29 +59,42 @@ class Converter:
         # set original image size
         self.original_width, self.original_height, = pilimg.size
 
+        # resize （計算早くなるように少しだけど小さくしておく）
+        pilimg = self._init_resize_img(pilimg)
+
         # pilimg.save('test_original.jpg')
 
         # 人物の座標（左上 x, y）(右下 x, y) を取得
         img = self._convert_pilimg_for_chainercv(pilimg)
-        img = np.asarray(img)
         person_range = self._detect_person_range(img)
+
+        pp(person_range)
 
         # 画像をトリミング
         crop_img = self._crop_img(pilimg, person_range)
-        # crop_img.save('./test_crop.jpg')
+        crop_img.save('./test_crop.jpg')
 
         # アスペクト比を維持したまま、余白を追加し正方形にする
         pasted_img = self._paste_background(crop_img)
-        # pasted_img.save('./test_pasted_img.jpg')
+        pasted_img.save('./test_pasted_img.jpg')
 
         # 画像をリサイズ
         resized_image = self._resize_img(pasted_img)
         resized_image.save(output_path)
 
+    def _init_resize_img(self, img: Image):
+        """
+        計算しやすいよう適当な大きさにリサイズ
+        :param Image img:
+        :return:
+        """
+        return img.resize((int(self.original_width / 2), int(self.original_height / 2)), Image.LANCZOS)
+
     def _convert_pilimg_for_chainercv(self, pilimg):
         """
         Pillow で読み込んだ画像(RGBのカラー画像とする)を、ChainerCVが扱える形式に変換
         """
+        # img = np.asarray(pilimg, dtype=np.float32)
         img = np.asarray(pilimg, dtype=np.float32)
         # transpose (H, W, C) -> (C, H, W)
         return img.transpose((2, 0, 1))
@@ -90,6 +105,8 @@ class Converter:
         :return:
         """
         bboxes, labels, scores = self.model.predict([img])
+        bboxes = self.xp.asarray(bboxes)
+        scores = self.xp.asarray(scores)
         bbox, label, score = bboxes[0], labels[0], scores[0]
 
         # 人物を検出できているか
@@ -100,27 +117,28 @@ class Converter:
             raise Exception('人物を検出できませんでした。')
 
         # 検出精度が曖昧な場合は除去
-        if np.any(score[person_indexes][:] < 0.50):
+        if self.xp.any(score[person_indexes][:] < 0.50):
             print(score[person_indexes][:])
             raise Exception('人物の検出結果が曖昧です。')
 
-        # yolo が検出したやつより、少しだけ大きめに切り出す
-        bbox[person_indexes][:, 2] -= 15   # 左上座標を 15 大きく
-        bbox[person_indexes][:, 2:] += 15   # 右下座標を 15 大きく
+        print(person_indexes)
+        pp(bbox)
 
-        # 補正された人物範囲の値のうち、最大値（最小値）を超えている場合は、最大値（最小値）に修正
-        bbox[person_indexes][:, 0][bbox[person_indexes][:, 0] < 0] = 0    # 左上 y 座標が 0 より小さい場合 0 に補正
-        bbox[person_indexes][:, 1][bbox[person_indexes][:, 1] < 0] = 0    # 左上 x 座標が 0 より小さい場合 0 に補正
-        bbox[person_indexes][:, 2][bbox[person_indexes][:, 2] < self.original_height] = self.original_height    # 右下 y 座標が max より大きい場合 max に補正
-        bbox[person_indexes][:, 2][bbox[person_indexes][:, 2] < self.original_width] = self.original_width    # 右下 x 座標が max より大きい場合 max に補正
+        # yolo が検出したやつより、少しだけ大きめに切り出す
+        bbox[person_indexes, :2] -= 15   # 左上座標を検出範囲より少し大きく
+        bbox[person_indexes, 2:] += 15   # 右下座標を検出範囲より少し大きく
 
         # 人物と特定された範囲のうち、各座標毎に最も大きい値を選択（）
-        left_top_y = bbox[person_indexes][:, 0].min()
-        left_top_x = bbox[person_indexes][:, 1].min()
-        right_bottom_y = bbox[person_indexes][:, 2].max()
-        right_bottom_x = bbox[person_indexes][:, 3].max()
+        left_top_y = float(bbox[person_indexes, 0].min())
+        left_top_x = float(bbox[person_indexes, 1].min())
+        right_bottom_y = float(bbox[person_indexes, 2].max())
+        right_bottom_x = float(bbox[person_indexes, 3].max())
 
-        # print((left_top_x, left_top_y, right_bottom_x, right_bottom_y))
+        left_top_y = left_top_y if left_top_y >= 0 else 0
+        left_top_x = left_top_x if left_top_x >= 0 else 0
+        right_bottom_y = right_bottom_y if right_bottom_y <= int(self.original_height / 2) else int(self.original_height / 2)
+        right_bottom_x = right_bottom_x if right_bottom_x <= int(self.original_width / 2) else int(self.original_width / 2)
+
         # 左上 x, y, 右下 x, y
         return left_top_x, left_top_y, right_bottom_x, right_bottom_y
 
@@ -167,8 +185,8 @@ if __name__ == "__main__":
     # setup
     # params
     # input_path = '/images_data/20181204_013516/fighting/a094-0209C/0001.jpg'
-    input_path = './a072-0587C/0001.jpg'
-    output_path = './test.jpg'
+    input_path = './tmp/a094-0218C/0001.jpg'
+    output_path = './test3.jpg'
 
     # execute
     converter_instance = Converter()
