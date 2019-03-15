@@ -23,7 +23,7 @@ class Recognition:
     TEST_DATA_FILE = ''
     MODEL_PATH = ''
     METHOD_TYPE = ''  # cnn or lrcn or person_lrcn
-    THREAD_SIZE = 7
+    THREAD_SIZE = 8
 
     # constant
     IMAGE_HEIGHT = 224
@@ -66,9 +66,9 @@ class Recognition:
         LrcnActivityRecognizer.MODEL_PATH = self.MODEL_PATH
         self.recognizer_instance = LrcnActivityRecognizer(self.actions)
 
-        # # person lrcn activity recognizer instance
+        # person lrcn activity recognizer instance
         # LrcnActivityRecognizer.MODEL_PATH = self.MODEL_PATH
-        # # self.recognizer_instance = LrcnActivityRecognizer(self.actions)
+        # self.recognizer_instance = LrcnActivityRecognizer(self.actions)
 
     def main(self):
         print('<<< Recognition class: main method >>>')
@@ -180,7 +180,7 @@ if __name__ == '__main__':
     #
     Recognition.ACTIONS_PATH = 'output/lrcn_recognition/models/20190101_063332/actions.pkl'
     Recognition.TEST_DATA_FILE = 'output/lrcn_recognition/models/20190101_063332/test_frame_data.pkl'
-    Recognition.MODEL_PATH = 'output/lrcn_recognition/models/20190101_063332/0099.model'
+    Recognition.MODEL_PATH = 'output/lrcn_recognition/models/20190101_063332/0159.model'
     Recognition.METHOD_TYPE = 'lrcn'
 
     # params

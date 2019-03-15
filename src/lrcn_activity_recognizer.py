@@ -9,6 +9,7 @@ from lrcn_recognition.LrcnActivityRecognitionModel import LrcnActivityRecognitio
 import img2vec
 import matplotlib
 from copy import deepcopy
+import cupy
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -46,7 +47,7 @@ class LrcnActivityRecognizer:
     def _to_gpu(self):
         if self.GPU_DEVICE >= 0:
             print('>>> use gpu')
-            self.xp = cuda.cupy
+            self.xp = cupy
             self.model.to_gpu()
 
     def main(self, paths: list, label: int):
@@ -83,7 +84,7 @@ class LrcnActivityRecognizer:
 
         # 各画像の結果をまとめる
         ys = self.xp.array(ys, dtype=np.float32)
-        result = self.xp.average(ys, axis=0)
+        result = self.xp.mean(ys, axis=0)
         max_value, max_label = float(result.max()), int(result.argmax())
 
         self._predict_action(max_label)

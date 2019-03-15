@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 from chainercv.datasets import voc_bbox_label_names
 from chainercv.links import YOLOv3
@@ -29,8 +29,6 @@ class Converter:
     def __init__(self):
         self.xp = np
         self.model = None
-        self.original_height = None  # default
-        self.original_width = None  # default
         self._prepare()
 
     def _prepare(self):
@@ -45,6 +43,12 @@ class Converter:
 
     def _to_gpu(self):
         print('>>> use gpu')
+        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+        from random import randint
+        a = randint(0, 1)
+        if a == 0:
+            os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
         if self.GPU_DEVICE >= 0:
             self.xp = cuda.cupy
             self.model.to_gpu()
@@ -56,27 +60,25 @@ class Converter:
         """
         pilimg = Image.open(input_path).convert(self.CONVERT_TYPE)
 
-        # set original image size
-        self.original_width, self.original_height, = pilimg.size
-
         # resize （計算早くなるように少しだけど小さくしておく）
         pilimg = self._init_resize_img(pilimg)
 
-        # pilimg.save('test_original.jpg')
+        # print(type(pilimg))
+        # pilimg.save('./tmp_test_original.jpg')
+
+        original_width, original_height, = pilimg.size
 
         # 人物の座標（左上 x, y）(右下 x, y) を取得
         img = self._convert_pilimg_for_chainercv(pilimg)
-        person_range = self._detect_person_range(img)
-
-        pp(person_range)
+        person_range = self._detect_person_range(img, original_width, original_height)
 
         # 画像をトリミング
         crop_img = self._crop_img(pilimg, person_range)
-        crop_img.save('./test_crop.jpg')
+        # crop_img.save('./tmp_test_crop_.jpg')
 
         # アスペクト比を維持したまま、余白を追加し正方形にする
         pasted_img = self._paste_background(crop_img)
-        pasted_img.save('./test_pasted_img.jpg')
+        # pasted_img.save('./tmp_test_pasted_img_.jpg')
 
         # 画像をリサイズ
         resized_image = self._resize_img(pasted_img)
@@ -88,7 +90,8 @@ class Converter:
         :param Image img:
         :return:
         """
-        return img.resize((int(self.original_width / 2), int(self.original_height / 2)), Image.LANCZOS)
+        original_width, original_height, = img.size
+        return img.resize((int(original_width / 2), int(original_height / 2)), Image.LANCZOS)
 
     def _convert_pilimg_for_chainercv(self, pilimg):
         """
@@ -99,7 +102,7 @@ class Converter:
         # transpose (H, W, C) -> (C, H, W)
         return img.transpose((2, 0, 1))
 
-    def _detect_person_range(self, img: np.ndarray):
+    def _detect_person_range(self, img: np.ndarray, original_width: int, original_height: int):
         """
          YOLO v3 を使って人物検出行い、範囲を特定する
         :return:
@@ -117,12 +120,9 @@ class Converter:
             raise Exception('人物を検出できませんでした。')
 
         # 検出精度が曖昧な場合は除去
-        if self.xp.any(score[person_indexes][:] < 0.50):
-            print(score[person_indexes][:])
+        if self.xp.any(score[person_indexes][:] < 0.40):
+            # print(score[person_indexes][:])
             raise Exception('人物の検出結果が曖昧です。')
-
-        print(person_indexes)
-        pp(bbox)
 
         # yolo が検出したやつより、少しだけ大きめに切り出す
         bbox[person_indexes, :2] -= 15   # 左上座標を検出範囲より少し大きく
@@ -136,8 +136,8 @@ class Converter:
 
         left_top_y = left_top_y if left_top_y >= 0 else 0
         left_top_x = left_top_x if left_top_x >= 0 else 0
-        right_bottom_y = right_bottom_y if right_bottom_y <= int(self.original_height / 2) else int(self.original_height / 2)
-        right_bottom_x = right_bottom_x if right_bottom_x <= int(self.original_width / 2) else int(self.original_width / 2)
+        right_bottom_y = right_bottom_y if right_bottom_y <= original_height else original_height
+        right_bottom_x = right_bottom_x if right_bottom_x <= original_width else original_width
 
         # 左上 x, y, 右下 x, y
         return left_top_x, left_top_y, right_bottom_x, right_bottom_y
@@ -150,6 +150,7 @@ class Converter:
         :param tuple person_range:
         :return:
         """
+        # print(person_range)
         return img.crop(person_range)
 
     @staticmethod
@@ -185,9 +186,33 @@ if __name__ == "__main__":
     # setup
     # params
     # input_path = '/images_data/20181204_013516/fighting/a094-0209C/0001.jpg'
-    input_path = './tmp/a094-0218C/0001.jpg'
-    output_path = './test3.jpg'
+
+    # data = [
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0001.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0002.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0003.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0004.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0005.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0006.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0007.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0008.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0009.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0010.jpg',
+    #     '/images_data/20181229_120953/doing_paper-rock-scissors/a093-0030C/0011.jpg',
+    # ]
+
+    data = [
+        './tmp/a094-0280C/0001.jpg',
+        './tmp/a094-0280C/0002.jpg',
+        './tmp/a094-0280C/0003.jpg',
+        './tmp/a094-0280C/0004.jpg',
+        './tmp/a094-0280C/0005.jpg',
+    ]
 
     # execute
     converter_instance = Converter()
-    converter_instance.main(input_path, output_path)
+
+    for i, path in enumerate(data):
+        input_path = path
+        output_path = './tmp_test' + str(i) + '.jpg'
+        converter_instance.main(input_path, output_path)

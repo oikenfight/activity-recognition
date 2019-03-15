@@ -59,6 +59,36 @@ RUN pip install \
     memory_profiler \
     --no-cache-dir
 
+#
+# chainerMN
+# （これ見た。https://qiita.com/minhal/items/0bd75f2a80fe8af473af）
+#
+
+# TODO: ほんとは然るべき場所に追加したいけど、キャッシュが取り消される時間も惜しいので。
+RUN apt install -y --allow-change-held-packages \
+    libnccl2 \
+    libnccl-dev \
+    libopenmpi-dev
+
+RUN wget https://download.open-mpi.org/release/open-mpi/v3.0/openmpi-3.0.3.tar.gz
+RUN tar -zxvf openmpi-3.0.3.tar.gz
+RUN cd ./openmpi-3.0.3 && \
+    ./configure --with-cuda --prefix=$HOME/local/openmpi && \
+    make -j4 && \
+    make install
+
+ENV LD_LIBRARY_PATH=$HOME/local/openmpi/lib:${LD_LIBRARY_PATH}
+ENV PATH=$HOME/local/openmpi/bin:${PATH}
+ENV NCCL_ROOT=/usr/local/nccl
+ENV CPATH=$NCCL_ROOT/include:$CPATH
+ENV LD_LIBRARY_PATH=$NCCL_ROOT/lib/:$LD_LIBRARY_PATH
+ENV LIBRARY_PATH=$NCCL_ROOT/lib/:$LIBRARY_PATH
+
+RUN pip install --upgrade pip
+RUN pip install \
+    cython \
+    chainermn
+
 RUN nvidia-smi
 
 RUN mkdir workspace
